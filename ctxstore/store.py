@@ -102,8 +102,8 @@ class Store:
         log = schema.get("log", {})
         if log.get("grammar") and log.get("section") in present and log["section"] not in sections.duplicates(doc.body):
             grammar = re.compile(log["grammar"])
-            for number, line in enumerate(sections.lines_of(doc.body, log["section"]), 1):
-                if line.strip() and not line.lstrip().startswith("<!--") and not grammar.match(line):
+            for number, line in sections.entries(sections.lines_of(doc.body, log["section"])):
+                if not grammar.match(line):
                     found.append(("SCHEMA_VIOLATION", f"{log['section']} line {number}"))
         return found
 

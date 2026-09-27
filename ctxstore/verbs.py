@@ -85,10 +85,14 @@ def log(store, params):
         if not name:
             raise CtxError("USAGE", "--section")
         line = f"- {date} — {text}"
+        order = schema.get("order", "oldest-first")
+        if order not in ("oldest-first", "newest-first"):
+            raise CtxError("SCHEMA_VIOLATION", "log.order")
+        add = sections.prepend_line if order == "newest-first" else sections.append_line
 
         def change(current):
             head, body = current[: len(current) - len(_body(current))], _body(current)
-            return head + sections.append_line(body, name, line)
+            return head + add(body, name, line)
     row = store.write("log", key, change, payload=text, now=now)
     return {"doc": row["doc"], "line": line, "after": row["after"]}, f"logged: {row['doc']}"
 
@@ -189,12 +193,13 @@ def _doc_lines(store, doc, body=False):
             spans.append(f"{heading} ({size})")
     if spans:
         lines.append("sections: " + " · ".join(spans))
-    section = store.types.get(name or "", {}).get("log", {}).get("section")
+    log_rules = store.types.get(name or "", {}).get("log", {})
+    section = log_rules.get("section")
     if section in sections.names(doc.body) and section not in sections.duplicates(doc.body):
-        entries = [l for l in sections.lines_of(doc.body, section) if l.strip() and not l.lstrip().startswith("<!--")]
+        entries = [line for _, line in sections.entries(sections.lines_of(doc.body, section))]
         if entries:
             lines.append(f"{section} (last {min(TAIL, len(entries))} of {len(entries)}):")
-            lines += entries[-TAIL:]
+            lines += entries[:TAIL] if log_rules.get("order") == "newest-first" else entries[-TAIL:]
     if body:
         lines.append("")
         lines += doc.body.strip("\n").split("\n")

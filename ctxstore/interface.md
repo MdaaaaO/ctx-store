@@ -121,7 +121,7 @@ A type schema is a JSON object; every key is optional:
 | `paths` | Glob patterns: docs at these paths are of this type when they have no `type` field |
 | `frontmatter` | Field → rule: `required`, `kind` (`string` `list` `date` `timestamp`), `const`, `enum` |
 | `sections` | `##` headings every doc of the type has |
-| `log` | `section`: where `log` appends; `grammar`: a regular expression every line of that section matches; `ledger: true`: `log` appends raw lines at the end of the doc |
+| `log` | `section`: where `log` adds its entry; `order`: `oldest-first` (default, the entry goes last) or `newest-first` (the entry goes first); `grammar`: a regular expression every line of that section matches; `ledger: true`: `log` appends raw lines at the end of the doc |
 | `owner` | The field that names the doc's owner; a write by another actor fails with `NOT_OWNER` |
 
 A doc of a type without a schema gets the general checks only: frontmatter
@@ -177,9 +177,11 @@ ctx rename <doc> <new> — memory tool: rename a doc, keeping links and the audi
 
 ctx log <doc> <text> [--section <heading>] [--date <YYYY-MM-DD>] [--from <file>]
 
-Append one entry to a doc's log, under the store lock. The entry is
-`- <date> — <text>`, added after the section's last line: a log reads oldest
-first. The section is `--section`, else the `log.section` of the doc's type.
+Add one entry to a doc's log, under the store lock. The entry is
+`- <date> — <text>`. It goes after the section's last line, so a log reads
+oldest first, unless the doc's type says `"order": "newest-first"`: then it
+goes before the first entry. The section is `--section`, else the
+`log.section` of the doc's type.
 For a ledger type the text is appended as it is, at the end of the doc.
 
 The text is one line. `log` does not change the `updated` field: the time of
@@ -219,7 +221,7 @@ The cold-start read, within a byte budget (default 4096; above 8192 needs
 `--full`). What does not fit is replaced by one line that says how much is
 missing.
 
-- `<doc>`: its frontmatter, its sections with their sizes, the last 5
+- `<doc>`: its frontmatter, its sections with their sizes, the 5 newest
   entries of its log.
 - `--registry`: one line per session that has not ended: name, status, epic,
   what it is working on, heartbeat.

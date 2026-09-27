@@ -1,0 +1,14 @@
+ctx: a markdown context store for coding agents.
+
+usage: ctx [--json] [--store <path>] <verb> [arguments]
+       ctx help [<verb> | <topic>]
+       ctx --version
+
+Memory tool   view create str_replace insert delete rename
+Writes        log fm row new move
+Reads         brief find resolve get
+Maintenance   validate doctor maintain touch migrate
+
+Topics        exit-codes errors output environment store selectors budgets payloads
+
+Available in this version: doctor, help.

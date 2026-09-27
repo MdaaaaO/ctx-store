@@ -1,0 +1,13 @@
+ctx doctor
+
+ctx doctor [--json] [--store <path>]
+
+Report what this machine and store give the tool: ctx version and api, Python
+version, lock timeout, git switch, scratch and cache directory, and per store
+the path, schema version, filesystem type, read-only state and lock mode.
+
+Lock mode is `flock` where a probe proves it (two descriptors on the marker
+file, the second must be refused), `mkdir` on a writable store without flock,
+`none` on a read-only store without flock. doctor writes nothing.
+
+Exit 0 with the report; 2 `NO_STORE`; 3 `SCHEMA_VIOLATION ctx-store.json`.

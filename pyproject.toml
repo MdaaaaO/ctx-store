@@ -1,0 +1,25 @@
+# Optional: ctx runs from a plain copy (`./ctx`). This file is for `pip install`.
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ctx-store"
+description = "A markdown context store for coding agents: validated writes, budgeted reads, audit trail."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+dependencies = []
+dynamic = ["version"]
+
+[project.scripts]
+ctx = "ctxstore.cli:main"
+
+[tool.setuptools]
+packages = ["ctxstore"]
+
+[tool.setuptools.package-data]
+ctxstore = ["interface.md"]
+
+[tool.setuptools.dynamic]
+version = {attr = "ctxstore.__version__"}

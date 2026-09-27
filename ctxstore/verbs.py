@@ -53,7 +53,7 @@ def validate(store, params):
     if changed:
         present = set(store.keys())
         for key in sorted(audited):
-            if key not in present and not store.generated(key):
+            if key not in present and key not in store.removed and not store.generated(key):
                 found.append(("UNAUDITED_WRITE", key, key))
     if found:
         raise Findings(found)

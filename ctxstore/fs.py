@@ -354,6 +354,26 @@ def write_atomic(path, data):
         return handle.read()
 
 
+def remove(path):
+    try:
+        os.unlink(path)
+    except PermissionError:
+        raise CtxError("STORE_READONLY", path) from None
+
+
+def is_dir(path):
+    return os.path.isdir(path)
+
+
+def template(root, name):
+    """The scaffold of a doc type: `.ctx/templates/<type>.md`, or None."""
+    path = os.path.join(root, ".ctx", "templates", name + ".md")
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
+
+
 def audit_append(root, actor, row):
     """Add one row, numbered from the store's counter. Call under the lock."""
     folder = os.path.join(root, ".audit")

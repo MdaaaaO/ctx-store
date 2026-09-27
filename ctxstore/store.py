@@ -127,9 +127,13 @@ class Store:
             if row.get("verb") == "adopt":
                 adopted[row["doc"]] = max(adopted.get(row["doc"], 0), _seq(row))
         broken = set()
+        last = {}
+        for row in sorted(rows, key=_seq):
+            last[row["doc"]] = row.get("after")
+        self.removed = {key for key, state in last.items() if state is None}
         for row in rows:
             key = row["doc"]
-            loose = row.get("before") is None or row["before"] not in after[key]
+            loose = row.get("before") is not None and row["before"] not in after[key]
             if row.get("verb") != "adopt" and loose and _seq(row) > adopted.get(key, 0):
                 broken.add(key)
         return after, broken
@@ -148,31 +152,52 @@ class Store:
         if fs.read_only(self.root):
             raise CtxError("STORE_READONLY", self.root)
         secrets.scan(payload)
+        with self.locked():
+            return self.apply(verb, key, change, now, actor, check)
+
+    def locked(self):
+        """The store lock, for a write that touches more than one doc."""
+        if not self.named:
+            raise CtxError("STORE_NOT_NAMED")
+        if fs.read_only(self.root):
+            raise CtxError("STORE_READONLY", self.root)
+        return fs.Lock(self.root, self.config.lock_timeout, self.config.lock_mode)
+
+    def apply(self, verb, key, change, now=None, actor=None, check=True):
+        """One doc's write, under a lock the caller holds. `change` returning
+        None removes the doc."""
+        path, key = fs.doc_path(self.root, key)
+        if self.generated(key):
+            raise CtxError("GENERATED", key)
         actor = actor or self.config.actor
-        with fs.Lock(self.root, self.config.lock_timeout, self.config.lock_mode):
-            before = fs.read_bytes(path, key) if fs.exists(path) else None
-            if before is not None:
-                self._owner_check(Doc(key, before), actor)
-            text = change(None if before is None else before.decode("utf-8"))
+        before = fs.read_bytes(path, key) if fs.exists(path) else None
+        if before is not None:
+            self._owner_check(key, before, actor)
+        text = change(None if before is None else _decode(before))
+        if text is None:
+            if before is None:
+                raise CtxError("NO_SUCH_DOC", key)
+            fs.remove(path)
+            data = None
+        else:
             data = text.encode("utf-8")
             if check:
                 found = self.findings(key, data)
                 if found:
                     raise CtxError(*found[0])
-            secrets.scan(text if before is None else _added(before.decode("utf-8"), text))
+            secrets.scan(text if before is None else _added(_decode(before), text))
             written = fs.write_atomic(path, data)
             if digest(written) != digest(data):
                 raise CtxError("STORE_READONLY", key)
-            row = {
-                "ts": now or fs.now_utc(),
-                "actor": actor,
-                "verb": verb,
-                "doc": key,
-                "before": None if before is None else digest(before),
-                "after": digest(data),
-            }
-            row = fs.audit_append(self.root, actor, row)
-        return row
+        row = {
+            "ts": now or fs.now_utc(),
+            "actor": actor,
+            "verb": verb,
+            "doc": key,
+            "before": None if before is None else digest(before),
+            "after": None if data is None else digest(data),
+        }
+        return fs.audit_append(self.root, actor, row)
 
     def adopt(self, key, data, now=None):
         """Record the current state of a doc that changed outside ctx."""
@@ -190,12 +215,23 @@ class Store:
             row = fs.audit_append(self.root, self.config.actor, row)
         return row
 
-    def _owner_check(self, doc, actor):
+    def _owner_check(self, key, data, actor):
+        try:
+            doc = Doc(key, data)
+        except CtxError:
+            return  # a doc that does not parse names no owner
         schema = self.types.get(self.type_of(doc) or "", {})
         field = schema.get("owner")
         owner = doc.fields.get(field) if field else None
         if isinstance(owner, str) and owner and owner != actor:
             raise CtxError("NOT_OWNER", doc.key)
+
+
+def _decode(data):
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise CtxError("SCHEMA_VIOLATION", "encoding") from None
 
 
 def _seq(row):

@@ -39,6 +39,8 @@ printed on stdout.
 | `NO_STORE` | 2 | no store found | the path, when one was given |
 | `NO_SUCH_DOC` | 2 | no such doc | the doc key |
 | `NO_SUCH_SECTION` | 2 | no such section | the heading |
+| `NO_MATCH` | 2 | text not found in the doc | the doc key |
+| `DOC_EXISTS` | 3 | doc exists | the doc key |
 | `AMBIGUOUS_SELECTOR` | 3 | selector matches more than one target | the selector |
 | `SCHEMA_VIOLATION` | 3 | schema violation | the field or file |
 | `SECRET_DETECTED` | 3 | payload looks like a secret | the rule that matched, never the value |

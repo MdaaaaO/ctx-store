@@ -47,7 +47,7 @@ def get(stores, params, config):
     if "tail" in params:
         if params["tail"] < 1:
             raise CtxError("USAGE", "--tail")
-        kept = [line for line in lines if line.strip() and not line.lstrip().startswith("<!--")]
+        kept = [line for _, line in sections.entries(lines)]
         lines = kept[-params["tail"]:]
     data, text = _deliver(params, config, doc.key.replace("/", "--") + ".md", lines)
     return {"doc": doc.key, **data}, text

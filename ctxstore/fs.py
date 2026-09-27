@@ -153,7 +153,23 @@ def marker(root):
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             raise CtxError("SCHEMA_VIOLATION", MARKER)
         config[key] = value
+    resolve = data.get("resolve", {})
+    if not isinstance(resolve, dict):
+        raise CtxError("SCHEMA_VIOLATION", MARKER)
+    config["resolve"] = resolve
     return config
+
+
+def write_scratch(folder, name, data):
+    """A payload file in the scratch directory (`--out auto`); returns its path."""
+    path = os.path.join(folder, name)
+    try:
+        os.makedirs(folder, exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.write(data)
+    except OSError:
+        raise CtxError("USAGE", "CTX_SCRATCH") from None
+    return path
 
 
 def types(root):

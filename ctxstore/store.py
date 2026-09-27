@@ -50,6 +50,13 @@ class Store:
         path, key = fs.doc_path(self.root, key)
         return path, key, fs.read_bytes(path, key)
 
+    def has(self, key):
+        try:
+            path, _ = fs.doc_path(self.root, key)
+        except CtxError:
+            return False
+        return fs.exists(path)
+
     def load(self, key):
         _, key, data = self.read(key)
         return Doc(key, data)

@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-from . import __version__, doctor, fs, spec, verbs
+from . import __version__, doctor, fs, reads, spec, verbs
 from .config import Config
 from .contract import API, CtxError, dump, ok_envelope
 from .store import Store
@@ -24,8 +24,15 @@ BUILT = {
     "fm": (("doc", "field", "value"), {"from": "file"}),
     "touch": ((), {"session": "text", "working": "text"}),
     "brief": (("doc",), {"registry": "flag", "session": "text", "budget": "int", "full": "flag"}),
+    "get": (("doc",), {"section": "text", "tail": "int", "budget": "int", "full": "flag", "out": "text"}),
+    "find": (("query",), {"type": "text", "tag": "text", "budget": "int", "full": "flag", "out": "text"}),
+    "resolve": (("key",), {}),
 }
-REQUIRED = {"log": ("doc", "text"), "fm": ("doc", "field", "value"), "touch": ("session",)}
+READS = ("brief", "get", "find", "resolve", "validate")
+REQUIRED = {
+    "log": ("doc", "text"), "fm": ("doc", "field", "value"), "touch": ("session",),
+    "get": ("doc",), "resolve": ("key",),
+}
 PAYLOAD = {"log": "text", "fm": "value"}  # what --from fills
 
 
@@ -135,6 +142,16 @@ def _wants_json(argv):
     return False
 
 
+def _first(stores, verb, params):
+    """The store a single-store verb runs on: the first one that holds the doc
+    it names, else the first one."""
+    if len(stores) > 1 and params.get("doc"):
+        for store in stores:
+            if store.has(params["doc"]):
+                return store
+    return stores[0]
+
+
 def _help(args):
     if len(args) > 1:
         raise CtxError("USAGE", "help")
@@ -177,8 +194,11 @@ def run(argv, environ, out, stdin=None):
             params["now"] = options["now"]
         config = Config(environ, options["store"])
         roots = fs.resolve_stores(config.stores, fs.cwd(), config.walk)
-        store = Store(roots[0], config, named=config.source != "walk")
-        data, text = getattr(verbs, verb)(store, params)
+        stores = [Store(root, config, named=config.source != "walk") for root in roots]
+        if verb in ("get", "find", "resolve"):
+            data, text = getattr(reads, verb)(stores, params, config)
+        else:
+            data, text = getattr(verbs, verb)(_first(stores, verb, params), params)
     elif verb in VERBS:
         raise CtxError("NOT_BUILT", verb)
     else:

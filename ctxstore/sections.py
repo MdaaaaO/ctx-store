@@ -61,6 +61,31 @@ def lines_of(body, name):
     return body.split("\n")[start:end]
 
 
+def entries(lines):
+    """(line number, line) of the lines that are neither blank nor inside an
+    HTML comment."""
+    comment = False
+    for number, line in enumerate(lines, 1):
+        text = line.strip()
+        if comment or text.startswith("<!--"):
+            comment = "-->" not in text
+        elif text:
+            yield number, line
+
+
+def prepend_line(body, name, line):
+    """The body with one line added before the section's first entry: the
+    first line that is neither blank nor a comment. An empty section takes it
+    as its last line."""
+    start, end = span(body, name)
+    lines = body.split("\n")
+    for number, _ in entries(lines[start:end]):
+        index = start + number - 1
+        lines[index:index] = [line]
+        return "\n".join(lines)
+    return append_line(body, name, line)
+
+
 def append_line(body, name, line):
     """The body with one line added after the section's last non-blank line."""
     start, end = span(body, name)

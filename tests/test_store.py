@@ -214,6 +214,28 @@ class Log(StoreCase):
             result = self.run_ctx("log", "--stdin", stdin=json.dumps({"doc": EPIC, "text": text}))
             self.assertEqual((result[0], result[2]), (3, "SCHEMA_VIOLATION text: schema violation\n"), repr(text))
 
+    def test_newest_first(self):
+        schema = os.path.join(self.store, ".ctx", "types", "epic.json")
+        with open(schema) as handle:
+            rules = json.load(handle)
+        rules["log"]["order"] = "newest-first"
+        with open(schema, "w") as handle:
+            json.dump(rules, handle)
+        self.put(EPIC, self.text(EPIC).replace("## Session log\n", "## Session log\n<!-- Dated one-liners,\n     newest first. -->\n\n"))
+        self.assertEqual(self.run_ctx("log", EPIC, "newest")[0], 0)
+        self.assertTrue(self.text(EPIC).endswith(
+            "## Session log\n<!-- Dated one-liners,\n     newest first. -->\n\n"
+            "- 2026-01-08 — newest\n- 2026-01-05 — created.\n- 2026-01-06 — region one done.\n"
+            "- 2026-01-07 — region two done.\n"))
+        self.assertIn("Session log (last 4 of 4):\n- 2026-01-08 — newest\n", self.run_ctx("brief", EPIC)[1])
+        self.put("epics/empty", self.text(EPIC).split("## Session log")[0] + "## Session log\n<!-- none yet -->\n")
+        self.assertEqual(self.run_ctx("log", "epics/empty", "first")[0], 0)
+        self.assertTrue(self.text("epics/empty").endswith("## Session log\n<!-- none yet -->\n- 2026-01-08 — first\n"))
+        rules["log"]["order"] = "sideways"
+        with open(schema, "w") as handle:
+            json.dump(rules, handle)
+        self.fails(self.run_ctx("log", EPIC, "x"), 3, "SCHEMA_VIOLATION log.order: schema violation")
+
     def test_ledger(self):
         self.assertEqual(self.run_ctx("log", "ledger", "| 2026-01-08 | appended |")[0], 0)
         self.assertTrue(self.text("ledger").endswith("| 2026-01-05 | opened |\n| 2026-01-08 | appended |\n"))

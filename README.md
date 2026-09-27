@@ -37,4 +37,4 @@ Every call a harness hook needs is one line. A write names its store; a read may
 | A step landed | `ctx log <doc> "<what happened>"` |
 
 **Status:** P1: `validate`, `log`, `fm`, `touch`, `brief` and `doctor` are built, the other verbs are specified. Design and phasing:
-[#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: Apache-2.0.
+[#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: MIT.

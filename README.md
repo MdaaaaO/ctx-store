@@ -11,5 +11,23 @@ Production-grade by design: Python stdlib only (≥ 3.10), runs from a plain cop
 exit-code table, `--json` envelope (`"api": 1`), temp + rename writes under a lock, secret guard on every
 payload, read-only store support, no writable state under the store for reads.
 
+<<<<<<< HEAD
 **Status:** bootstrapping (P0). Design and phasing:
 [#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: MIT.
+=======
+## Try it
+
+```sh
+git clone https://github.com/MdaaaaO/ctx-store && cd ctx-store
+./ctx --version
+./ctx doctor --store tests/fixtures/store-v1
+./ctx help errors
+```
+
+No install step: `ctx` runs from a plain copy of the repo on Python ≥ 3.10. The interface (verbs, exit
+codes, error strings, `--json` envelope, environment) is [`docs/interface.md`](docs/interface.md);
+`ctx help` prints from the same file. Tests: `make ci`.
+
+**Status:** bootstrapping (P0): `doctor` and `help` are built, the other verbs are specified. Design and phasing:
+[#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: Apache-2.0.
+>>>>>>> origin/main

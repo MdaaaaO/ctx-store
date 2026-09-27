@@ -1,0 +1,27 @@
+{
+  "api": 1,
+  "data": {
+    "api": 1,
+    "cache_dir": {
+      "exists": false,
+      "path": null
+    },
+    "git": false,
+    "lock_timeout": 10.0,
+    "python": "<python>",
+    "scratch": null,
+    "store_source": "env",
+    "stores": [
+      {
+        "filesystem": "<filesystem>",
+        "lock_mode": "<lock>",
+        "path": "<store>",
+        "read_only": "<read-only>",
+        "schema_version": 1
+      }
+    ],
+    "version": "0.1.0"
+  },
+  "ok": true,
+  "verb": "doctor"
+}

@@ -1,0 +1,10 @@
+# Third-party actions are pinned by commit SHA; Dependabot proposes the bumps and keeps the `# vN` comment.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci(deps)"
+    labels: [dependencies, area:ci]

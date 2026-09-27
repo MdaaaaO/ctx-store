@@ -24,7 +24,7 @@ def report(config, roots):
                 "schema_version": fs.schema_version(root),
                 "filesystem": fs.filesystem(root),
                 "read_only": fs.read_only(root),
-                "lock_mode": fs.lock_mode(root),
+                "lock_mode": config.lock_mode or fs.lock_mode(root),
             }
             for root in roots
         ],

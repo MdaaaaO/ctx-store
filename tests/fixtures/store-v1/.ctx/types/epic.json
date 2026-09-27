@@ -1,0 +1,11 @@
+{
+  "frontmatter": {
+    "title": {"required": true},
+    "type": {"const": "epic"},
+    "status": {"required": true, "enum": ["active", "paused", "done"]},
+    "tags": {"kind": "list"},
+    "updated": {"kind": "date"}
+  },
+  "sections": ["Goal", "Remaining work", "Session log"],
+  "log": {"section": "Session log", "grammar": "^- \\d{4}-\\d{2}-\\d{2} — .+$"}
+}

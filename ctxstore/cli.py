@@ -1,13 +1,15 @@
 """Command line front-end. No prompts, no colour, deterministic output."""
+import json
 import os
 import sys
 
-from . import __version__, doctor, fs, spec
+from . import __version__, doctor, fs, spec, verbs
 from .config import Config
 from .contract import API, CtxError, dump, ok_envelope
+from .store import Store
 
-# Every verb of the interface; a verb without a handler is specified but not
-# built yet.
+# Every verb of the interface; a verb that is not in BUILT is specified but
+# not built yet.
 VERBS = (
     "view", "create", "str_replace", "insert", "delete", "rename",
     "log", "fm", "row", "new", "move",
@@ -15,32 +17,107 @@ VERBS = (
     "validate", "doctor", "maintain", "touch", "migrate",
 )
 
+# verb -> (positional parameters, options: name -> kind)
+BUILT = {
+    "validate": ((), {"changed": "flag", "adopt": "flag"}),
+    "log": (("doc", "text"), {"section": "text", "date": "text", "from": "file"}),
+    "fm": (("doc", "field", "value"), {"from": "file"}),
+    "touch": ((), {"session": "text", "working": "text"}),
+    "brief": (("doc",), {"registry": "flag", "session": "text", "budget": "int", "full": "flag"}),
+}
+REQUIRED = {"log": ("doc", "text"), "fm": ("doc", "field", "value"), "touch": ("session",)}
+PAYLOAD = {"log": "text", "fm": "value"}  # what --from fills
 
-def _parse(argv):
-    """Split global options from the verb and its arguments. Unknown options
-    are rejected."""
-    options = {"json": False, "store": None, "version": False}
+
+def _globals(argv):
+    """Split the global options from the verb and its arguments."""
+    options = {"json": False, "store": None, "version": False, "now": None, "stdin": False}
     rest = []
     args = list(argv)
     while args:
         arg = args.pop(0)
-        if arg == "--json":
-            options["json"] = True
-        elif arg == "--version":
-            options["version"] = True
-        elif arg == "--store":
-            if not args:
-                raise CtxError("USAGE", "--store")
-            options["store"] = args.pop(0)
-        elif arg.startswith("--store="):
-            options["store"] = arg.split("=", 1)[1]
+        if arg == "--":
+            rest += ["--", *args]
+            break
+        name, _, inline = arg.partition("=")
+        if arg in ("--json", "--version", "--stdin"):
+            options[arg[2:]] = True
+        elif name in ("--store", "--now"):
+            if not inline and not args:
+                raise CtxError("USAGE", name)
+            options[name[2:]] = inline or args.pop(0)
         elif arg in ("-h", "--help"):
             rest.insert(0, "help")
-        elif arg.startswith("-") and arg != "-":
-            raise CtxError("USAGE", arg)
         else:
             rest.append(arg)
     return options, rest
+
+
+def _params(verb, args, stdin):
+    """The verb's parameters from the command line, or from one JSON object on
+    stdin (`--stdin`). Unknown options and keys are rejected."""
+    positional, options = BUILT[verb]
+    params = {}
+    if stdin is not None:
+        try:
+            given = json.loads(stdin)
+        except ValueError:
+            given = None
+        if not isinstance(given, dict) or args:
+            raise CtxError("USAGE", "--stdin")
+        for key, value in given.items():
+            kind = options.get(key) or ("text" if key in positional else None)
+            wrong = (
+                kind is None
+                or (kind == "flag" and not isinstance(value, bool))
+                or (kind == "int" and type(value) is not int)
+                or (kind in ("text", "file") and not isinstance(value, str))
+            )
+            if wrong:
+                raise CtxError("USAGE", key)
+            if not (kind == "flag" and value is False):
+                params[key] = value
+    else:
+        words, args, literal = [], list(args), False
+        while args:
+            arg = args.pop(0)
+            if not literal and arg == "--":
+                literal = True
+            elif not literal and arg.startswith("--"):
+                name, has, inline = arg[2:].partition("=")
+                kind = options.get(name)
+                if kind is None or (kind == "flag" and has) or name in params:
+                    raise CtxError("USAGE", f"--{name}")
+                if kind == "flag":
+                    params[name] = True
+                    continue
+                if not has and not args:
+                    raise CtxError("USAGE", f"--{name}")
+                value = inline if has else args.pop(0)
+                if kind == "int":
+                    if not value.isdigit():
+                        raise CtxError("USAGE", f"--{name}")
+                    value = int(value)
+                params[name] = value
+            else:
+                words.append(arg)
+        if len(words) > len(positional):
+            raise CtxError("USAGE", words[len(positional)])
+        params.update(zip(positional, words))
+    if "from" in params:
+        target = PAYLOAD[verb]
+        if target in params:
+            raise CtxError("USAGE", "--from")
+        source = params.pop("from")
+        data = sys.stdin.buffer.read() if source == "-" and stdin is None else fs.read_payload(source)
+        try:
+            params[target] = data.decode("utf-8")
+        except UnicodeDecodeError:
+            raise CtxError("USAGE", "--from") from None
+    for name in REQUIRED.get(verb, ()):
+        if name not in params:
+            raise CtxError("USAGE", name)
+    return params
 
 
 def _wants_json(argv):
@@ -49,9 +126,11 @@ def _wants_json(argv):
     args = list(argv)
     while args:
         arg = args.pop(0)
+        if arg == "--":
+            return False
         if arg == "--json":
             return True
-        if arg == "--store" and args:
+        if arg in ("--store", "--now") and args:
             args.pop(0)
     return False
 
@@ -62,9 +141,9 @@ def _help(args):
     if not args:
         return {"topic": "", "text": spec.overview()}
     name = args[0]
-    verbs = spec.verbs()
-    if name in verbs:
-        return {"topic": name, "text": f"ctx {name}\n\n{verbs[name]}"}
+    sections = spec.verbs()
+    if name in sections:
+        return {"topic": name, "text": f"ctx {name}\n\n{sections[name]}"}
     topics = spec.topics()
     if name in topics:
         heading, body = topics[name]
@@ -72,30 +151,38 @@ def _help(args):
     raise CtxError("USAGE", name)
 
 
-def _doctor(args, options, environ):
-    if args:
-        raise CtxError("USAGE", args[0])
-    config = Config(environ, options["store"])
-    roots = fs.resolve_stores(config.stores, fs.cwd(), config.walk)
-    return doctor.report(config, roots)
-
-
-def run(argv, environ, out):
-    """Returns the text to print on success; raises CtxError otherwise."""
-    options, rest = _parse(argv)
+def run(argv, environ, out, stdin=None):
+    """Prints the result on success; raises CtxError otherwise."""
+    options, rest = _globals(argv)
+    verb = rest[0] if rest else "help"
     if options["version"]:
         verb, data = "version", {"version": __version__}
         text = f"ctx {__version__} (api {API})"
-    elif not rest or rest[0] == "help":
-        verb, data = "help", _help(rest[1:])
+    elif verb == "help":
+        data = _help(rest[1:])
         text = data["text"]
-    elif rest[0] == "doctor":
-        verb, data = "doctor", _doctor(rest[1:], options, environ)
+    elif verb == "doctor":
+        if rest[1:]:
+            raise CtxError("USAGE", rest[1])
+        config = Config(environ, options["store"])
+        roots = fs.resolve_stores(config.stores, fs.cwd(), config.walk)
+        data = doctor.report(config, roots)
         text = doctor.text(data)
-    elif rest[0] in VERBS:
-        raise CtxError("NOT_BUILT", rest[0])
+    elif verb in BUILT:
+        payload = None
+        if options["stdin"]:
+            payload = (sys.stdin if stdin is None else stdin).read()
+        params = _params(verb, rest[1:], payload)
+        if options["now"]:
+            params["now"] = options["now"]
+        config = Config(environ, options["store"])
+        roots = fs.resolve_stores(config.stores, fs.cwd(), config.walk)
+        store = Store(roots[0], config, named=config.source != "walk")
+        data, text = getattr(verbs, verb)(store, params)
+    elif verb in VERBS:
+        raise CtxError("NOT_BUILT", verb)
     else:
-        raise CtxError("USAGE", rest[0])
+        raise CtxError("USAGE", verb)
     out.write((dump(ok_envelope(verb, data)) if options["json"] else text) + "\n")
 
 

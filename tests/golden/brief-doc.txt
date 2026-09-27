@@ -1,0 +1,10 @@
+epics/sample-rollout (epic, 351 bytes)
+title: Sample rollout
+status: active
+tags: [sample]
+updated: 2026-01-07
+sections: Tracker & links (23) · Goal (45) · Remaining work (16) · Session log (94)
+Session log (last 3 of 3):
+- 2026-01-05 — created.
+- 2026-01-06 — region one done.
+- 2026-01-07 — region two done.

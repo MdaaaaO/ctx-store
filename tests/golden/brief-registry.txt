@@ -1,0 +1,3 @@
+sessions: 2 not ended
+- alpha-rollout · active · EX-1 · region three · 2026-01-07T10:00:00Z
+- beta-docs · idle · EX-2 · waiting for review · 2026-01-07T10:00:00Z

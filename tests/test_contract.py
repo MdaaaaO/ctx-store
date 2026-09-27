@@ -48,16 +48,16 @@ class Contract(unittest.TestCase):
         rows = {}
         for line in spec.topics()["errors"][1].splitlines():
             cells = [cell.strip() for cell in line.strip("|").split("|")]
-            if cells[0].startswith("`"):
+            if line.startswith("| `"):
                 rows[cells[0].strip("`")] = (int(cells[1]), cells[2])
         self.assertEqual(rows, ERRORS)
 
     def test_unbuilt_verb(self):
-        code, out, err = ctx("log", "some-doc")
+        code, out, err = ctx("find", "some-doc")
         self.assertEqual(code, 1)
         self.assertEqual(out, "")
         self.assertEqual(
-            err, "NOT_BUILT log: verb is specified but not built in this version\n"
+            err, "NOT_BUILT find: verb is specified but not built in this version\n"
         )
 
     def test_unknown_verb_and_option(self):

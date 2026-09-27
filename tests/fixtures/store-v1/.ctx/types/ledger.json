@@ -1,0 +1,4 @@
+{
+  "paths": ["ledger.md"],
+  "log": {"ledger": true}
+}

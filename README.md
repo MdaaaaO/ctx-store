@@ -24,5 +24,17 @@ No install step: `ctx` runs from a plain copy of the repo on Python ≥ 3.10. Th
 codes, error strings, `--json` envelope, environment) is [`docs/interface.md`](docs/interface.md);
 `ctx help` prints from the same file. Tests: `make ci`.
 
-**Status:** bootstrapping (P0): `doctor` and `help` are built, the other verbs are specified. Design and phasing:
+## Hooks
+
+Every call a harness hook needs is one line. A write names its store; a read may find it by walking up.
+
+| When | Call |
+|---|---|
+| After a change under the store | `ctx validate --changed` (add `--adopt` while writes still come from outside ctx) |
+| Heartbeat | `ctx touch --session <id>` |
+| Session start | `ctx brief --registry` |
+| After a compaction | `ctx brief --session <id>` |
+| A step landed | `ctx log <doc> "<what happened>"` |
+
+**Status:** P1: `validate`, `log`, `fm`, `touch`, `brief` and `doctor` are built, the other verbs are specified. Design and phasing:
 [#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: Apache-2.0.

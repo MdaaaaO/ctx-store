@@ -1,0 +1,54 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.x"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: make ci
+      - name: Runs from a plain copy, outside the checkout
+        run: |
+          cp -r . "$RUNNER_TEMP/copy"
+          cd "$RUNNER_TEMP"
+          copy/ctx --version
+          copy/ctx doctor --store copy/tests/fixtures/store-v1
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["python:3.10-slim", "python:3-slim"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Harness in a container, fixture store on a read-only mount
+        run: |
+          docker run --rm \
+            -v "$PWD:/src:ro" \
+            -v "$PWD/tests/fixtures/store-v1:/store:ro" \
+            -e CTX_TEST_RO_STORE=/store \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -w /src \
+            "${{ matrix.image }}" \
+            python -m unittest discover -s tests -t . -v

@@ -62,6 +62,7 @@ printed on stdout.
 | Variable | Default | Meaning |
 |---|---|---|
 | `CTX_STORE` | walk up from the working directory | Store root, or a list separated like `PATH`; `--store` overrides it |
+| `CTX_NO_WALK` | unset | `1` turns the walk up off: without `CTX_STORE` or `--store` the result is `NO_STORE`. For tests, worktrees and temporary directories below a live store |
 | `CTX_LOCK_TIMEOUT` | `10` | Seconds a write waits for the lock before exit 4 |
 | `CTX_CACHE_DIR` | `$XDG_CACHE_HOME/ctx`, else `~/.cache/ctx` | Optional cache; never required, never created by a read |
 | `CTX_SCRATCH` | unset | Directory for temporary payload files |
@@ -78,7 +79,8 @@ A store root is a directory that holds `ctx-store.json`:
 
 Without `CTX_STORE` or `--store`, ctx walks up from the working directory and
 takes the first directory that is a store root or holds a `.context/`
-directory that is one. Docs are `*.md` files with YAML frontmatter below the
+directory that is one. A directory without the marker never matches.
+`CTX_NO_WALK=1` turns the walk off. Docs are `*.md` files with YAML frontmatter below the
 root. Reads write nothing under the store.
 
 ## Selectors
@@ -166,7 +168,8 @@ ctx validate [--changed] — check docs against their schema; report unaudited w
 ctx doctor [--json] [--store <path>]
 
 Report what this machine and store give the tool: ctx version and api, Python
-version, lock timeout, git switch, scratch and cache directory, and per store
+version, lock timeout, git switch, scratch and cache directory, how the store
+was found (`flag`, `env` or `walk`), and per store
 the path, schema version, filesystem type, read-only state and lock mode.
 
 Lock mode is `flock` where a probe proves it (two descriptors on the marker

@@ -14,6 +14,8 @@ class Config:
         self.cache_dir = _cache_dir(environ)
         self.scratch = environ.get("CTX_SCRATCH") or None
         self.git = environ.get("CTX_GIT", "") == "1"
+        self.walk = environ.get("CTX_NO_WALK", "") != "1"
+        self.source = "flag" if store_flag else "env" if self.stores else "walk"
 
 
 def _store_list(value):

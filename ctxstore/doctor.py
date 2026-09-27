@@ -12,6 +12,7 @@ def report(config, roots):
         "python": platform.python_version(),
         "lock_timeout": config.lock_timeout,
         "git": config.git,
+        "store_source": config.source,
         "scratch": config.scratch,
         "cache_dir": {
             "path": config.cache_dir,
@@ -44,7 +45,7 @@ def text(data):
     ]
     for store in data["stores"]:
         lines += [
-            f"store: {store['path']}",
+            f"store: {store['path']} (from {data['store_source']})",
             f"  schema version: {store['schema_version']}",
             f"  filesystem: {store['filesystem']}",
             f"  read-only: {'yes' if store['read_only'] else 'no'}",

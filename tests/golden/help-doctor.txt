@@ -3,7 +3,8 @@ ctx doctor
 ctx doctor [--json] [--store <path>]
 
 Report what this machine and store give the tool: ctx version and api, Python
-version, lock timeout, git switch, scratch and cache directory, and per store
+version, lock timeout, git switch, scratch and cache directory, how the store
+was found (`flag`, `env` or `walk`), and per store
 the path, schema version, filesystem type, read-only state and lock mode.
 
 Lock mode is `flock` where a probe proves it (two descriptors on the marker

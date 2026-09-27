@@ -10,11 +10,17 @@ FIXTURE = os.path.join(ROOT, "tests", "fixtures", "store-v1")
 GOLDEN = os.path.join(ROOT, "tests", "golden")
 
 
-def ctx(*args, env=None, cwd=None):
-    """Run ctx with a clean environment; returns (exit, stdout, stderr)."""
+def ctx(*args, env=None, cwd=None, walk=False):
+    """Run ctx with a clean environment; returns (exit, stdout, stderr).
+
+    The walk up is off unless a test asks for it, so a run that forgets its
+    store can never land on a real one above the checkout."""
+    env = dict(env or {})
+    if not walk:
+        env["CTX_NO_WALK"] = "1"
     done = subprocess.run(
         [sys.executable, CTX, *args],
-        env=env or {},
+        env=env,
         cwd=cwd or ROOT,
         capture_output=True,
         text=True,

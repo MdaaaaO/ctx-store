@@ -28,7 +28,7 @@ class Doctor(unittest.TestCase):
 
     def test_walks_up(self):
         inside = os.path.join(FIXTURE, "reference")
-        code, out, _ = ctx("doctor", "--json", cwd=inside)
+        code, out, _ = ctx("doctor", "--json", cwd=inside, walk=True)
         self.assertEqual(code, 0)
         store = json.loads(out)["data"]["stores"][0]
         self.assertEqual(store["path"], os.path.realpath(FIXTURE))
@@ -38,10 +38,26 @@ class Doctor(unittest.TestCase):
             shutil.copytree(FIXTURE, os.path.join(work, ".context"))
             deep = os.path.join(work, "repo", "src")
             os.makedirs(deep)
-            code, out, _ = ctx("doctor", "--json", cwd=deep)
+            code, out, _ = ctx("doctor", "--json", cwd=deep, walk=True)
             self.assertEqual(code, 0)
             path = json.loads(out)["data"]["stores"][0]["path"]
             self.assertEqual(path, os.path.realpath(os.path.join(work, ".context")))
+
+    def test_no_walk(self):
+        inside = os.path.join(FIXTURE, "reference")
+        code, out, err = ctx("doctor", cwd=inside)
+        self.assertEqual((code, out, err), (2, "", "NO_STORE: no store found\n"))
+        code, out, _ = ctx("doctor", "--json", cwd=inside, env={"CTX_STORE": FIXTURE})
+        self.assertEqual(json.loads(out)["data"]["store_source"], "env")
+        code, out, _ = ctx("doctor", "--json", "--store", FIXTURE, cwd=inside)
+        self.assertEqual(json.loads(out)["data"]["store_source"], "flag")
+        code, out, _ = ctx("doctor", "--json", cwd=inside, walk=True)
+        self.assertEqual(json.loads(out)["data"]["store_source"], "walk")
+
+    def test_marker_less_directory_never_matches(self):
+        with tempfile.TemporaryDirectory() as work:
+            os.makedirs(os.path.join(work, ".context", "reference"))
+            self.assertEqual(ctx("doctor", cwd=work, walk=True)[0], 2)
 
     def test_store_list(self):
         with tempfile.TemporaryDirectory() as work:
@@ -55,7 +71,7 @@ class Doctor(unittest.TestCase):
 
     def test_no_store(self):
         with tempfile.TemporaryDirectory() as work:
-            code, out, err = ctx("doctor", cwd=work)
+            code, out, err = ctx("doctor", cwd=work, walk=True)
             self.assertEqual((code, out, err), (2, "", "NO_STORE: no store found\n"))
             code, _, err = ctx("doctor", "--store", work)
             self.assertEqual((code, err), (2, f"NO_STORE {work}: no store found\n"))

@@ -10,6 +10,7 @@
     "lock_timeout": 10.0,
     "python": "<python>",
     "scratch": null,
+    "store_source": "env",
     "stores": [
       {
         "filesystem": "<filesystem>",

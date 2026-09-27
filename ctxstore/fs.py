@@ -50,7 +50,7 @@ def find_store(start):
         current = parent
 
 
-def resolve_stores(configured, start):
+def resolve_stores(configured, start, walk=True):
     if configured:
         roots = []
         for path in configured:
@@ -58,7 +58,7 @@ def resolve_stores(configured, start):
                 raise CtxError("NO_STORE", path)
             roots.append(os.path.realpath(path))
         return roots
-    root = find_store(start)
+    root = find_store(start) if walk else None
     if root is None:
         raise CtxError("NO_STORE")
     return [root]

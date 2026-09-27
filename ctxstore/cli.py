@@ -63,7 +63,7 @@ def _doctor(args, options, environ):
     if args:
         raise CtxError("USAGE", args[0])
     config = Config(environ, options["store"])
-    roots = fs.resolve_stores(config.stores, fs.cwd())
+    roots = fs.resolve_stores(config.stores, fs.cwd(), config.walk)
     return doctor.report(config, roots)
 
 

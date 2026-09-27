@@ -12,4 +12,4 @@ exit-code table, `--json` envelope (`"api": 1`), temp + rename writes under a lo
 payload, read-only store support, no writable state under the store for reads.
 
 **Status:** bootstrapping (P0). Design and phasing:
-[claude-workspace#143](https://github.com/MdaaaaO/claude-workspace/issues/143). Licence: Apache-2.0.
+[#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: Apache-2.0.

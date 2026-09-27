@@ -1,0 +1,62 @@
+name: pr-title
+
+# PRs are squash-merged, so the PR title becomes the commit subject on main — and that subject becomes the
+# CHANGELOG.md line of the next release (CONTRIBUTING.md § Releases). Two checks, one job:
+#   conventional-release check-title — the types .conventional-release.toml knows (what the changelog groups by)
+#   length and period                — at most 72 characters, no trailing period
+# Runs on GitHub-hosted runners like every workflow.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-title:
+    name: pr-title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The checker and the types come from the base commit, so a PR cannot relax the rule that judges
+      # its own title (a change to them takes effect for the PRs after it).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Title is a Conventional Commit
+        env:
+          TOOL: conventional-release>=0.2,<1
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          uvx --from "$TOOL" conventional-release check-title "$TITLE"
+          [ "${#TITLE}" -le 72 ] || { echo "::error::the title is ${#TITLE} characters; the limit is 72"; exit 1; }
+          case "$TITLE" in *.) echo "::error::the title ends with a period"; exit 1 ;; esac
+
+  # Every change comes from an issue (CONTRIBUTING.md § From issue to merge). The rule and the
+  # parser live in .github/scripts/check-pr-issue.sh — run it locally before `gh pr create`. A change to
+  # the script takes effect for the PRs after it.
+  pr-issue:
+    name: pr-issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read  # the check looks each linked issue up
+    steps:
+      # The script comes from the base commit, as in pr-title: a PR cannot relax the check that judges it.
+      # Title, body and author come from the event payload (env below), not from the checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - name: PR description links the issue it came from
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/check-pr-issue.sh

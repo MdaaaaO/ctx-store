@@ -1,0 +1,134 @@
+# auto-merge — squash-merge a PR the moment every gate is green, so nobody has to press the button.
+#
+# Runs after `ci`, `pr-title` or `claude-review` completes on a PR head (`workflow_run`, so it is always the
+# copy on main that runs, never the PR's). It merges when ALL of these hold for the PR whose head is that sha:
+#   - open, not a draft, from a branch of this repo, based on main;
+#   - every check in REQUIRED completed with success on the head (a skipped claude-review — release PRs,
+#     no token — is not success: those PRs wait for the owner);
+#   - the latest review by REVIEWER is APPROVED and was submitted for this exact head (claude-review.yml
+#     turns the reviewer's `Verdict:` line into that review; a push after it means no verdict yet);
+#   - zero unresolved review threads (CONTRIBUTING.md § Review: threads are not optional);
+#   - GitHub reports the PR mergeable.
+# Anything else is a notice, never a failure: the PR simply waits — for the next event or the owner.
+#
+# The merge uses AUTOMERGE_TOKEN (a fine-grained PAT of the owner: this repo, Contents + Pull requests
+# read/write), not github.token: a merge by github.token creates a push that triggers NO workflow, so
+# `ci`, `main-guard` and `release` would never run on main. Without the secret the job says so and stops.
+#
+# Runs on GitHub-hosted runners like every workflow. `workflow_run` always
+# executes the copy of this file on main, and the job checks out nothing — it reads PR metadata, never PR code.
+name: auto-merge
+
+on:
+  workflow_run:
+    workflows: [ci, pr-title, claude-review]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read  # commits/<sha>/check-runs answers 403 without it
+
+concurrency:
+  group: auto-merge-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    name: merge
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      REPO: ${{ github.repository }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      # comma-separated: a check name may contain spaces
+      REQUIRED: host (3.10),host (3.x),container (python:3.10-slim),container (python:3-slim),pr-title,pr-issue,claude-review
+      REVIEWER: github-actions[bot]
+    steps:
+      - id: token
+        name: Is the merge token set?
+        env:
+          TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::notice title=auto-merge skipped::AUTOMERGE_TOKEN is not set — create a fine-grained PAT (this repo: Contents + Pull requests read/write) and add it with: gh secret set AUTOMERGE_TOKEN"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: gates
+        if: steps.token.outputs.enabled == 'true'
+        name: Every gate green on this head?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out() { echo "$1=$2" >> "$GITHUB_OUTPUT"; }
+          skip() { echo "::notice title=auto-merge::$SHA — $1"; out go false; exit 0; }
+
+          prs=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[] | select(.state == "open" and .draft == false
+                  and .base.ref == "main" and .head.sha == env.SHA and .head.repo.full_name == env.REPO) | .number') \
+            || skip "could not list the PRs of this head"
+          [ -n "$prs" ] || skip "no open, non-draft PR of this repo has this head"
+          [ "$(wc -l <<< "$prs")" -eq 1 ] || skip "more than one open PR has this head ($(tr '\n' ' ' <<< "$prs"))"
+          pr=$prs
+
+          runs=$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
+                   --jq '.check_runs[] | "\(.name)\t\(.status)\t\(.conclusion)"') \
+            || skip "could not list the check runs"
+          IFS=',' read -ra required <<< "$REQUIRED"
+          for name in "${required[@]}"; do
+            line=$(awk -F'\t' -v n="$name" '$1 == n' <<< "$runs" | tail -1)
+            [ -n "$line" ] || skip "check '$name' has not run on this head"
+            status=$(cut -f2 <<< "$line"); conclusion=$(cut -f3 <<< "$line")
+            [ "$status" = completed ] || skip "check '$name' is still $status"
+            [ "$conclusion" = success ] || skip "check '$name' concluded $conclusion — waiting for the owner"
+          done
+
+          review=$(gh api --paginate "repos/$REPO/pulls/$pr/reviews?per_page=100" \
+                     --jq '.[] | select(.user.login == env.REVIEWER) | "\(.submitted_at)\t\(.commit_id)\t\(.state)"' \
+                   | sort | tail -1) || skip "could not list the reviews"
+          [ -n "$review" ] || skip "no review by $REVIEWER yet"
+          [ "$(cut -f2 <<< "$review")" = "$SHA" ] || skip "the latest $REVIEWER review is for another head"
+          state=$(cut -f3 <<< "$review")
+          [ "$state" = APPROVED ] || skip "the latest $REVIEWER review is $state — waiting for the owner"
+
+          threads=$(gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){
+                      pullRequest(number:$n){reviewThreads(first:100){totalCount nodes{isResolved}}}}}' \
+                      -f o="${REPO%/*}" -f r="${REPO#*/}" -F n="$pr" \
+                      --jq '.data.repository.pullRequest.reviewThreads | "\(.totalCount) \([.nodes[] | select(.isResolved | not)] | length)"') \
+            || skip "could not list the review threads"
+          [ "${threads% *}" -le 100 ] || skip "more than 100 review threads — cannot tell whether all are resolved"
+          [ "${threads#* }" -eq 0 ] || skip "${threads#* } review thread(s) unresolved — answer and resolve them"
+
+          mergeable="null"
+          for _ in 1 2 3 4 5 6; do  # GitHub computes mergeability lazily; null = not yet
+            mergeable=$(gh api "repos/$REPO/pulls/$pr" --jq '"\(.mergeable) \(.mergeable_state)"') \
+              || skip "could not read the PR"
+            [ "${mergeable% *}" = null ] || break
+            sleep 10
+          done
+          [ "${mergeable% *}" = true ] || skip "PR #$pr is not mergeable ($mergeable)"
+
+          echo "auto-merge: PR #$pr — checks green, $REVIEWER approved this head, no open threads, mergeable"
+          out pr "$pr"
+          out go true
+
+      - name: Squash-merge
+        if: steps.gates.outputs.go == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}
+          PR: ${{ steps.gates.outputs.pr }}
+        run: |
+          set -euo pipefail
+          # REST, not `gh pr merge`: the fine-grained PAT is refused on the GraphQL `repository.pullRequest`
+          # query gh runs first. `sha` is the head the gates checked — GitHub
+          # answers 409 if it moved. Subject/body come from the repo's squash settings (PR title / PR body).
+          if out=$(gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f merge_method=squash -f sha="$SHA" 2>&1); then
+            echo "auto-merge: merged PR #$PR at $SHA"
+          else
+            echo "::warning title=auto-merge not merged::PR #$PR at $SHA — $(printf '%s' "$out" | tail -1)"
+            exit 1
+          fi

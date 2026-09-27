@@ -19,7 +19,7 @@ class Doctor(unittest.TestCase):
     def test_text(self):
         code, out, _ = ctx("doctor", "--store", FIXTURE)
         self.assertEqual(code, 0)
-        self.assertIn(f"store: {os.path.realpath(FIXTURE)}\n  schema version: 1\n", out)
+        self.assertIn(f"store: {os.path.realpath(FIXTURE)} (from flag)\n  schema version: 1\n", out)
         self.assertRegex(out, r"  lock mode: (flock|mkdir|none)\n$")
 
     def test_deterministic(self):

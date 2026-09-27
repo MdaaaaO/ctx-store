@@ -11,10 +11,6 @@ Production-grade by design: Python stdlib only (≥ 3.10), runs from a plain cop
 exit-code table, `--json` envelope (`"api": 1`), temp + rename writes under a lock, secret guard on every
 payload, read-only store support, no writable state under the store for reads.
 
-<<<<<<< HEAD
-**Status:** bootstrapping (P0). Design and phasing:
-[#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: MIT.
-=======
 ## Try it
 
 ```sh
@@ -29,5 +25,4 @@ codes, error strings, `--json` envelope, environment) is [`docs/interface.md`](d
 `ctx help` prints from the same file. Tests: `make ci`.
 
 **Status:** bootstrapping (P0): `doctor` and `help` are built, the other verbs are specified. Design and phasing:
-[#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: Apache-2.0.
->>>>>>> origin/main
+[#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: MIT.

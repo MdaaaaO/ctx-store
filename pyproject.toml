@@ -8,6 +8,7 @@ name = "ctx-store"
 description = "A markdown context store for coding agents: validated writes, budgeted reads, audit trail."
 readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
 dependencies = []
 dynamic = ["version"]
 

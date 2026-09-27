@@ -1,0 +1,7 @@
+# conventional-release (https://github.com/MdaaaaO/conventional-release) — CONTRIBUTING.md § Releases.
+# A release is a CHANGELOG.md section, the version bump, a vX.Y.Z tag and a GitHub Release. Types are the
+# tool's default Angular set.
+version-files = ["ctxstore/VERSION"]  # the one place the version lives; `ctx --version` reads it
+changelog = "CHANGELOG.md"
+base-branch = "main"
+tag-prefix = "v"

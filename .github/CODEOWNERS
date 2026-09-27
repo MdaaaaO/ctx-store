@@ -1,0 +1,3 @@
+# Workflows run with repository tokens: every change to them needs the maintainer's review.
+/.github/workflows/ @MdaaaaO
+/.github/CODEOWNERS @MdaaaaO

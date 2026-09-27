@@ -35,6 +35,7 @@ printed on stdout.
 | Code | Exit | Message | Detail |
 |---|---|---|---|
 | `USAGE` | 1 | bad command line | the offending argument or variable |
+| `NOT_BUILT` | 1 | verb is specified but not built in this version | the verb |
 | `NO_STORE` | 2 | no store found | the path, when one was given |
 | `NO_SUCH_DOC` | 2 | no such doc | the doc key |
 | `NO_SUCH_SECTION` | 2 | no such section | the heading |

@@ -16,6 +16,7 @@ EXIT_READONLY = 5
 # code -> (exit code, fixed message)
 ERRORS = {
     "USAGE": (EXIT_USAGE, "bad command line"),
+    "NOT_BUILT": (EXIT_USAGE, "verb is specified but not built in this version"),
     "NO_STORE": (EXIT_NOT_FOUND, "no store found"),
     "NO_SUCH_DOC": (EXIT_NOT_FOUND, "no such doc"),
     "NO_SUCH_SECTION": (EXIT_NOT_FOUND, "no such section"),

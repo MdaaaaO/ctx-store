@@ -68,7 +68,7 @@ def schema_version(root):
     try:
         with open(os.path.join(root, MARKER), encoding="utf-8") as handle:
             version = json.load(handle)["schema_version"]
-    except (ValueError, KeyError, TypeError):
+    except (OSError, ValueError, KeyError, TypeError):
         raise CtxError("SCHEMA_VIOLATION", MARKER) from None
     if type(version) is not int or version < 1:
         raise CtxError("SCHEMA_VIOLATION", MARKER)

@@ -85,6 +85,17 @@ class Doctor(unittest.TestCase):
                 self.assertEqual(code, 3, marker)
                 self.assertEqual(err, "SCHEMA_VIOLATION ctx-store.json: schema violation\n")
 
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root ignores modes")
+    def test_unreadable_marker(self):
+        with tempfile.TemporaryDirectory() as work:
+            marker = os.path.join(work, fs.MARKER)
+            with open(marker, "w") as handle:
+                handle.write('{"schema_version": 1}')
+            os.chmod(marker, 0)
+            code, out, err = ctx("doctor", "--store", work)
+            self.assertEqual((code, out), (3, ""))
+            self.assertEqual(err, "SCHEMA_VIOLATION ctx-store.json: schema violation\n")
+
     def test_environment(self):
         env = {
             "CTX_STORE": FIXTURE,

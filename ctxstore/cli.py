@@ -43,6 +43,19 @@ def _parse(argv):
     return options, rest
 
 
+def _wants_json(argv):
+    """Whether --json was given as an option, for a run that failed before or
+    while its command line was parsed. An option's value is not an option."""
+    args = list(argv)
+    while args:
+        arg = args.pop(0)
+        if arg == "--json":
+            return True
+        if arg == "--store" and args:
+            args.pop(0)
+    return False
+
+
 def _help(args):
     if len(args) > 1:
         raise CtxError("USAGE", "help")
@@ -80,7 +93,7 @@ def run(argv, environ, out):
         verb, data = "doctor", _doctor(rest[1:], options, environ)
         text = doctor.text(data)
     elif rest[0] in VERBS:
-        raise CtxError("USAGE", f"{rest[0]} is not available in ctx {__version__}")
+        raise CtxError("NOT_BUILT", rest[0])
     else:
         raise CtxError("USAGE", rest[0])
     out.write((dump(ok_envelope(verb, data)) if options["json"] else text) + "\n")
@@ -94,7 +107,7 @@ def main(argv=None, environ=None, out=None, err=None):
     try:
         run(argv, environ, out)
     except CtxError as failure:
-        if "--json" in argv:
+        if _wants_json(argv):
             out.write(dump(failure.envelope()) + "\n")
         err.write(failure.line() + "\n")
         return failure.exit_code

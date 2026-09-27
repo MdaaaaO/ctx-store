@@ -52,12 +52,12 @@ class Contract(unittest.TestCase):
                 rows[cells[0].strip("`")] = (int(cells[1]), cells[2])
         self.assertEqual(rows, ERRORS)
 
-    def test_unbuilt_verb_is_usage(self):
+    def test_unbuilt_verb(self):
         code, out, err = ctx("log", "some-doc")
         self.assertEqual(code, 1)
         self.assertEqual(out, "")
         self.assertEqual(
-            err, "USAGE log is not available in ctx 0.1.0: bad command line\n"
+            err, "NOT_BUILT log: verb is specified but not built in this version\n"
         )
 
     def test_unknown_verb_and_option(self):
@@ -84,6 +84,11 @@ class Contract(unittest.TestCase):
                 },
             },
         )
+
+    def test_option_value_is_not_an_option(self):
+        code, out, err = ctx("--store", "--json", "doctor")
+        self.assertEqual((code, out), (2, ""))
+        self.assertEqual(err, "NO_STORE --json: no store found\n")
 
     def test_no_colour(self):
         for args in (("help",), ("help", "errors"), ("--version",)):

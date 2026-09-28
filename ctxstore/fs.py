@@ -354,6 +354,22 @@ def write_atomic(path, data):
         return handle.read()
 
 
+def folder(root, key):
+    """The key of a directory below the root ('' for the root itself), or
+    None when `key` does not name one."""
+    if key in ("", ".", "/"):
+        return ""
+    if "\0" in key or os.path.isabs(key):
+        return None
+    path = os.path.realpath(os.path.join(root, key))
+    if not os.path.isdir(path) or os.path.commonpath([root, path]) != root:
+        return None
+    inside = os.path.relpath(path, root)
+    if any(part.startswith(".") for part in inside.split(os.sep)):
+        return None
+    return inside.replace(os.sep, "/")
+
+
 def remove(path):
     try:
         os.unlink(path)

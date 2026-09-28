@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-from . import __version__, doctor, fs, reads, spec, verbs
+from . import __version__, doctor, fs, mcp, memory_tool, reads, spec, verbs, writes
 from .config import Config
 from .contract import API, CtxError, dump, ok_envelope
 from .store import Store
@@ -27,13 +27,24 @@ BUILT = {
     "get": (("doc",), {"section": "text", "tail": "int", "budget": "int", "full": "flag", "out": "text"}),
     "find": (("query",), {"type": "text", "tag": "text", "budget": "int", "full": "flag", "out": "text"}),
     "resolve": (("key",), {}),
+    "view": (("doc",), {"range": "text", "budget": "int", "full": "flag"}),
+    "create": (("doc", "text"), {"type": "text", "title": "text", "from": "file"}),
+    "new": (("type", "doc"), {"title": "text"}),
+    "str_replace": (("doc",), {"old": "text", "new": "text"}),
+    "insert": (("doc", "text"), {"line": "int", "from": "file"}),
+    "delete": (("doc",), {}),
+    "rename": (("doc", "to"), {}),
+    "move": (("doc", "to"), {}),
 }
+WRITES = ("create", "new", "str_replace", "insert", "delete", "rename", "move")
 READS = ("brief", "get", "find", "resolve", "validate")
 REQUIRED = {
     "log": ("doc", "text"), "fm": ("doc", "field", "value"), "touch": ("session",),
     "get": ("doc",), "resolve": ("key",),
+    "create": ("doc",), "new": ("type", "doc"), "str_replace": ("doc", "old"),
+    "insert": ("doc", "text", "line"), "delete": ("doc",), "rename": ("doc", "to"), "move": ("doc", "to"),
 }
-PAYLOAD = {"log": "text", "fm": "value"}  # what --from fills
+PAYLOAD = {"log": "text", "fm": "value", "create": "text", "insert": "text"}  # what --from fills
 
 
 def _globals(argv):
@@ -72,18 +83,7 @@ def _params(verb, args, stdin):
             given = None
         if not isinstance(given, dict) or args:
             raise CtxError("USAGE", "--stdin")
-        for key, value in given.items():
-            kind = options.get(key) or ("text" if key in positional else None)
-            wrong = (
-                kind is None
-                or (kind == "flag" and not isinstance(value, bool))
-                or (kind == "int" and type(value) is not int)
-                or (kind in ("text", "file") and not isinstance(value, str))
-            )
-            if wrong:
-                raise CtxError("USAGE", key)
-            if not (kind == "flag" and value is False):
-                params[key] = value
+        params = typed(verb, given)
     else:
         words, args, literal = [], list(args), False
         while args:
@@ -121,10 +121,48 @@ def _params(verb, args, stdin):
             params[target] = data.decode("utf-8")
         except UnicodeDecodeError:
             raise CtxError("USAGE", "--from") from None
+    return required(verb, params)
+
+
+def typed(verb, given, files=True):
+    """Parameters given as a JSON object, checked against the verb's own."""
+    positional, options = BUILT[verb]
+    params = {}
+    for key, value in given.items():
+        kind = options.get(key) or ("text" if key in positional else None)
+        wrong = (
+            kind is None
+            or (kind == "file" and not files)
+            or (kind == "flag" and not isinstance(value, bool))
+            or (kind == "int" and type(value) is not int)
+            or (kind in ("text", "file") and not isinstance(value, str))
+        )
+        if wrong:
+            raise CtxError("USAGE", key)
+        if not (kind == "flag" and value is False):
+            params[key] = value
+    return params
+
+
+def required(verb, params):
     for name in REQUIRED.get(verb, ()):
         if name not in params:
             raise CtxError("USAGE", name)
     return params
+
+
+def dispatch(verb, params, environ, store=None, now=None):
+    """Run one built verb; (data, text). Every front-end ends here."""
+    if now:
+        params = {**params, "now": now}
+    config = Config(environ, store)
+    roots = fs.resolve_stores(config.stores, fs.cwd(), config.walk)
+    stores = [Store(root, config, named=config.source != "walk") for root in roots]
+    if verb in ("get", "find", "resolve"):
+        return getattr(reads, verb)(stores, params, config)
+    if verb in WRITES or verb == "view":
+        return getattr(writes, verb)(_first(stores, verb, params), params)
+    return getattr(verbs, verb)(_first(stores, verb, params), params)
 
 
 def _wants_json(argv):
@@ -190,15 +228,17 @@ def run(argv, environ, out, stdin=None):
         if options["stdin"]:
             payload = (sys.stdin if stdin is None else stdin).read()
         params = _params(verb, rest[1:], payload)
-        if options["now"]:
-            params["now"] = options["now"]
-        config = Config(environ, options["store"])
-        roots = fs.resolve_stores(config.stores, fs.cwd(), config.walk)
-        stores = [Store(root, config, named=config.source != "walk") for root in roots]
-        if verb in ("get", "find", "resolve"):
-            data, text = getattr(reads, verb)(stores, params, config)
-        else:
-            data, text = getattr(verbs, verb)(_first(stores, verb, params), params)
+        data, text = dispatch(verb, params, environ, options["store"], options["now"])
+    elif verb == "memory":
+        if rest[1:]:
+            raise CtxError("USAGE", rest[1])
+        source = sys.stdin if stdin is None else stdin
+        data, text = memory_tool.run(source.read(), environ, options["store"], options["now"])
+    elif verb == "mcp":
+        if rest[1:]:
+            raise CtxError("USAGE", rest[1])
+        mcp.serve(sys.stdin if stdin is None else stdin, out, environ, options["store"])
+        return
     elif verb in VERBS:
         raise CtxError("NOT_BUILT", verb)
     else:

@@ -3,6 +3,8 @@
 ctx: a markdown context store for coding agents.
 
 usage: ctx [--json] [--store <path>] [--now <timestamp>] [--stdin] <verb> [arguments]
+       ctx memory        one memory-tool call as JSON on stdin
+       ctx mcp           MCP server on stdin and stdout
        ctx help [<verb> | <topic>]
        ctx --version
 
@@ -12,8 +14,9 @@ Reads         brief find resolve get
 Maintenance   validate doctor maintain touch migrate
 
 Topics        exit-codes errors output environment store docs selectors budgets payloads
+              front-ends
 
-Available in this version: brief, doctor, fm, help, log, touch, validate.
+Available in this version: every verb except maintain, migrate and row.
 
 ## Exit codes
 
@@ -96,13 +99,20 @@ directory that is one. A directory without the marker never matches.
 
 A write runs only on a store named by `CTX_STORE` or `--store`; on a store
 found by the walk it fails with `STORE_NOT_NAMED`. Reads keep the walk and
-write nothing under the store.
+write nothing under the store. Reads are not audited and not gated: that is
+a decision, not a gap.
+
+With a list of stores, a read looks in every store in order (a doc key found
+in an earlier store hides the same key in a later one; rows carry the store's
+number, `2:reference/x`). A write goes to the first store that holds the doc
+it names, else to the first store.
 
 | Path | Holds |
 |---|---|
-| `ctx-store.json` | `schema_version`, and optionally `generated` and `ignore`: lists of glob patterns over doc paths. A generated doc is not validated and not writable (`GENERATED`); an ignored one is not a doc |
+| `ctx-store.json` | `schema_version`, and optionally `generated` and `ignore`: lists of glob patterns over doc paths. A generated doc is not validated and not writable (`GENERATED`); an ignored one is not a doc. `resolve`: `key_regex`, `fields`, `section` (see `ctx help resolve`) |
 | `**/*.md` | The docs. A doc's key is its path without `.md` (`reference/lock-modes`) |
 | `.ctx/types/<type>.json` | One schema per doc type |
+| `.ctx/templates/<type>.md` | The scaffold of a new doc of the type; `{{TITLE}}` `{{TYPE}}` `{{DATE}}` `{{KEY}}` `{{SLUG}}` are filled in |
 | `.audit/<actor>.jsonl` | One row per write: `seq` (the store's write counter) `ts` `actor` `verb` `doc` `before` `after` (sha256 of the doc, `null` for none) |
 | `.audit/seq` | The number of the last write |
 | `.lock/` | The store lock |
@@ -149,31 +159,79 @@ quoting. Unknown keys are rejected.
 `--now <YYYY-MM-DDTHH:MM:SSZ>` sets the time a write records, for
 reproducible runs.
 
+## Front-ends
+
+One core, three front-ends. Each ends in the same code, so a write is
+validated, locked and audited whichever way it arrives.
+
+| Front-end | Use |
+|---|---|
+| `ctx <verb>` | hooks, people, cron |
+| `ctx memory` | Anthropic's memory tool: the tool call's input as one JSON object on stdin (`{"command": "view", "path": "/memories/epics/sample.md"}`), the tool result on stdout. `/memories` is the store. Commands `view` `create` `str_replace` `insert` `delete` `rename` are the verbs of the same name |
+| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb, `ctx_<verb>`, its input the verb's parameters. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's |
+
+Claude Desktop, `claude_desktop_config.json`:
+
+    {"mcpServers": {"ctx": {"command": "/path/to/ctx", "args": ["mcp"],
+      "env": {"CTX_STORE": "/path/to/store", "CTX_ACTOR": "desktop"}}}}
+
 ## Verbs
 
 ### view
 
-ctx view <doc> — memory tool: show a doc or a directory listing. Not built yet (P2).
+ctx view [<doc> | <directory>] [--range <first>:<last>] [--budget <bytes>] [--full]
+
+A doc with its lines numbered, or the docs below a directory with their
+sizes (no argument: the whole store). Inside the byte budget (default 8192).
+
+Exit 0; 2 `NO_SUCH_DOC`; 3 `PATH_ESCAPE`.
 
 ### create
 
-ctx create <doc> — memory tool: create a doc from its type's template. Not built yet (P2).
+ctx create <doc> [<text>] [--from <file>] [--type <type>] [--title <title>]
+
+Write a doc: the text given, or without one the scaffold of `--type`. An
+existing doc is replaced (the audit row keeps the hash of what it was); use
+`new` to refuse that.
+
+Exit codes as for `log`.
 
 ### str_replace
 
-ctx str_replace <doc> — memory tool: replace one exact string in a doc. Not built yet (P2).
+ctx str_replace <doc> --old <text> [--new <text>]
+
+Replace one exact string. It must occur once: no match is `NO_MATCH`, more
+than one `AMBIGUOUS_SELECTOR`.
+
+Exit codes as for `log`; 2 `NO_MATCH`.
 
 ### insert
 
-ctx insert <doc> — memory tool: insert text at a line. Not built yet (P2).
+ctx insert <doc> <text> --line <n> [--from <file>]
+
+Insert text after line `n` (0: before the first line).
+
+Exit codes as for `log`; 1 `USAGE --line` for a line the doc does not have.
 
 ### delete
 
-ctx delete <doc> — memory tool: delete a doc, keeping links and the audit trail. Not built yet (P2).
+ctx delete <doc>
+
+Remove a doc. The audit row records it (`after` is `null`). Docs that link
+to it are named in the result and left as they are.
+
+Exit codes as for `log`.
 
 ### rename
 
-ctx rename <doc> <new> — memory tool: rename a doc, keeping links and the audit trail. Not built yet (P2).
+ctx rename <doc> <new>
+
+Rename a doc and rewrite the links to it: relative markdown links
+(`[x](../a/b.md#part)`) and wikilinks of its key or name (`[[b]]`). The
+doc's own relative links are rewritten for its new place. One lock, one
+audit row per doc touched.
+
+Exit codes as for `log`; 3 `DOC_EXISTS`.
 
 ### log
 
@@ -209,11 +267,18 @@ ctx row <doc> — add or change one table row. Built on first need.
 
 ### new
 
-ctx new <type> <key> — scaffold a doc from its type's template. Not built yet (P2).
+ctx new <type> <doc> [--title <title>]
+
+Scaffold a doc from the type's template, `.ctx/templates/<type>.md`; a type
+without one gets frontmatter and a title.
+
+Exit codes as for `log`; 3 `DOC_EXISTS`.
 
 ### move
 
-ctx move <doc> <new> — move a doc and rewrite links to it. Not built yet (P2).
+ctx move <doc> <new>
+
+`rename` under the name of the structured write; the audit rows say `move`.
 
 ### brief
 
@@ -233,15 +298,38 @@ Exit 0; 2 `NO_SUCH_DOC`; 3 `AMBIGUOUS_SELECTOR`.
 
 ### find
 
-ctx find --budget <bytes> — search that returns references and slices. Not built yet (P2).
+ctx find [<query>] [--type <type>] [--tag <tag>] [--budget <bytes>] [--full] [--out -|auto]
+
+One row per hit: `key · title · updated · summary` (≤ 80 characters). The
+query is matched without case against key and frontmatter first, then the
+body. Hits that do not fit the budget (default 4096) are folded into a count.
+
+`--out auto` writes the whole result to a file in `$CTX_SCRATCH` and prints
+its path.
+
+Exit 0 (no hit is `0 hits`); 1 `USAGE`.
 
 ### resolve
 
-ctx resolve <key> — turn a key into a doc reference. Not built yet (P2).
+ctx resolve <key>
+
+The one doc a tracker key belongs to, as a `find` row. The key's shape is the
+store's `resolve.key_regex`, never a built-in pattern. A doc matches when one
+of its `resolve.fields` is the key, else when its `resolve.section` names
+the key; field matches win.
+
+Exit 0; 1 `USAGE resolve.key_regex` when no store sets one; 2 `NO_SUCH_DOC`
+(also for a key of another shape); 3 `AMBIGUOUS_SELECTOR`, listing the docs.
 
 ### get
 
-ctx get <doc> --section <heading> [--tail <n>] — read one section or its last lines. Not built yet (P2).
+ctx get <doc> [--section <heading>] [--tail <n>] [--budget <bytes>] [--full] [--out -|auto]
+
+One section of a doc, or its body; `--tail` keeps the last `n` entries
+(lines that are neither blank nor comments). Inside the byte budget
+(default 8192); `--out auto` as for `find`.
+
+Exit 0; 2 `NO_SUCH_DOC`, `NO_SUCH_SECTION`; 3 `AMBIGUOUS_SELECTOR`.
 
 ### validate
 

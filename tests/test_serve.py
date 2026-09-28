@@ -180,7 +180,7 @@ class Connection(ServeCase):
         ), [401, 403, 400, 404, 400, 400, 200])
 
     def test_a_body_that_is_not_read_ends_the_connection(self):
-        for method in ("GET", "DELETE"):
+        for method in ("GET", "DELETE", "PUT", "PATCH", "OPTIONS", "TRACE", "BREW"):
             with socket.create_connection(("127.0.0.1", self.port), timeout=10) as link:
                 link.sendall((f"{method} /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello"
                               f"POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n").encode())
@@ -191,7 +191,7 @@ class Connection(ServeCase):
                         break
                     data += part
                 self.assertEqual(data.count(b"HTTP/1.1 "), 1, method)
-                self.assertTrue(data.startswith(b"HTTP/1.1 405"), method)
+                self.assertTrue(data.startswith(b"HTTP/1.1 501" if method == "BREW" else b"HTTP/1.1 405"), method)
 
     def test_the_log_holds_no_query_and_no_request_text(self):
         import io
@@ -206,7 +206,7 @@ class Connection(ServeCase):
         text = self.server.log.getvalue()
         self.assertEqual(text.splitlines(), ["127.0.0.1 POST /mcp 401", "127.0.0.1 GET /authorize 400",
                                              "127.0.0.1 POST /mcp 200", "127.0.0.1 GET /… 404",
-                                             "127.0.0.1 refused 501", "127.0.0.1 ? /mcp 501"])
+                                             "127.0.0.1 ? /mcp 501"])
         for value in (TOKEN, "secret-looking-value", "correct", "token=", "client_id", "state"):
             self.assertNotIn(value, text)
 

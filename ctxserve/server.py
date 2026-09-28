@@ -18,7 +18,7 @@ from .auth import Auth, Refused, State
 LIMIT = 1024 * 1024  # bytes of a request body
 PROTOCOLS = mcp.PROTOCOLS
 ORIGINS = ("https://claude.ai", "https://claude.com")
-METHODS = ("GET", "POST", "DELETE", "PUT", "PATCH", "HEAD", "OPTIONS")
+METHODS = ("GET", "POST", "DELETE", "PUT", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT")
 ROUTES = ("/mcp", "/authorize", "/token", "/register", "/.well-known/oauth-authorization-server")
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>ctx: allow access</title>
@@ -69,9 +69,7 @@ class Handler(BaseHTTPRequestHandler):
             self.server.log.write(f"{self.address_string()} {method} {route if known else '/…'} {status}\n")
 
     def log_error(self, pattern, *args):
-        if self.server.log:
-            code = args[0] if args and isinstance(args[0], int) else "-"
-            self.server.log.write(f"{self.address_string()} refused {code}\n")
+        pass  # the refusal is logged with its status by log_request, in the one shape
 
     def log_message(self, pattern, *args):
         pass
@@ -159,6 +157,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         self.unread()
         self.send(405 if self.route == "/mcp" else 404, {"error": "not allowed"}, headers=[("Allow", "POST")])
+
+    def refuse_method(self):
+        """A method this server has no use for. Its body is not read, so the
+        connection ends with the answer."""
+        self.close_connection = True
+        self.send(405, {"error": "not allowed"}, headers=[("Allow", "POST"), ("Connection", "close")])
+
+    do_PUT = do_PATCH = do_HEAD = do_OPTIONS = do_TRACE = do_CONNECT = refuse_method
 
     # --- POST ---
 

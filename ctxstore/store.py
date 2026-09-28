@@ -188,7 +188,7 @@ class Store:
         before = self.backend.read(key) if self.backend.exists(key) else None
         if before is not None:
             self._owner_check(key, before, actor)
-        text = change(None if before is None else _decode(before))
+        text = change(None if before is None else decode(before))
         if text is None:
             if before is None:
                 raise CtxError("NO_SUCH_DOC", key)
@@ -200,7 +200,7 @@ class Store:
                 found = self.findings(key, data)
                 if found:
                     raise CtxError(*found[0])
-            secrets.scan(text if before is None else _added(_decode(before), text))
+            secrets.scan(text if before is None else _added(decode(before), text))
             written = self.backend.write(key, data)
             if digest(written) != digest(data):
                 raise CtxError("STORE_READONLY", key)
@@ -242,7 +242,7 @@ class Store:
             raise CtxError("NOT_OWNER", doc.key)
 
 
-def _decode(data):
+def decode(data):
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError:

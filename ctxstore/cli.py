@@ -19,6 +19,7 @@ VERBS = (
 
 # verb -> (positional parameters, options: name -> kind)
 BUILT = {
+    "doctor": ((), {}),
     "validate": ((), {"changed": "flag", "adopt": "flag"}),
     "log": (("doc", "text"), {"section": "text", "date": "text", "from": "file"}),
     "fm": (("doc", "field", "value"), {"from": "file"}),
@@ -157,6 +158,9 @@ def dispatch(verb, params, environ, store=None, now=None):
         params = {**params, "now": now}
     config = Config(environ, store)
     backends = backend.open_stores(config, fs.cwd())
+    if verb == "doctor":
+        data = doctor.report(config, backends)
+        return data, doctor.text(data)
     stores = [Store(one, config, named=config.source != "walk") for one in backends]
     if verb in ("get", "find", "resolve"):
         return getattr(reads, verb)(stores, params, config)
@@ -219,10 +223,8 @@ def run(argv, environ, out, stdin=None):
     elif verb == "doctor":
         if rest[1:]:
             raise CtxError("USAGE", rest[1])
-        config = Config(environ, options["store"])
-        data = doctor.report(config, backend.open_stores(config, fs.cwd()))
-        text = doctor.text(data)
-    elif verb in BUILT:
+        data, text = dispatch("doctor", {}, environ, options["store"])
+    elif verb in BUILT and verb != "doctor":
         payload = None
         if options["stdin"]:
             payload = (sys.stdin if stdin is None else stdin).read()

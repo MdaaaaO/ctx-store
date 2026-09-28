@@ -231,6 +231,27 @@ class MemoryVerbs(StoreCase):
         self.assertEqual(self.text("README"), before)
         self.assertEqual(self.audit(), [])
 
+    def test_a_shared_name_is_not_a_wikilink_target(self):
+        self.put("archive/lock-modes", "---\ntitle: Old\ntype: reference\n---\n\nold\n")
+        self.put("reference/links", LINKS)
+        self.assertEqual(self.run_ctx("rename", "reference/lock-modes", "reference/locks")[0], 0)
+        text = self.text("reference/links")
+        self.assertIn("[locks](locks.md#details), [[lock-modes]], [[reference/locks|the doc]]", text)
+
+    def test_view_listing_budget(self):
+        for number in range(250):
+            self.put(f"reference/a-long-name-for-a-doc-{number:03}", "---\ntitle: N\ntype: reference\n---\n")
+        out = self.run_ctx("view", "reference")[1]
+        self.assertGreater(len(out.encode()), 4096)
+        self.assertLessEqual(len(out.encode()), 8192)
+        self.assertRegex(out, r"… \d+ more docs, raise --budget\n$")
+
+    def test_rename_a_doc_that_is_not_utf8(self):
+        with open(self.path("reference/binary"), "wb") as handle:
+            handle.write(b"---\ntitle: B\ntype: reference\n---\n\n\xff\xfe\n")
+        self.fails(self.run_ctx("rename", "reference/binary", "reference/b2"), 3, "SCHEMA_VIOLATION encoding: schema violation")
+        self.assertTrue(os.path.exists(self.path("reference/binary")))
+
     def test_rename_failures(self):
         before = sorted(name for _, _, files in os.walk(self.store) for name in files if name != "store.lock")
         self.fails(self.run_ctx("rename", EPIC, "reference/lock-modes"), 3, "DOC_EXISTS reference/lock-modes: doc exists")
@@ -313,7 +334,7 @@ class Mcp(StoreCase):
         tools = {tool["name"]: tool for tool in listing["result"]["tools"]}
         self.assertEqual(sorted(tools), sorted(
             "ctx_" + verb for verb in ("view create str_replace insert delete rename log fm new move brief find "
-                                       "resolve get validate touch").split()))
+                                       "resolve get validate touch doctor").split()))
         self.assertEqual(tools["ctx_log"]["inputSchema"], {
             "type": "object", "additionalProperties": False, "required": ["doc", "text"],
             "properties": {"doc": {"type": "string"}, "text": {"type": "string"}, "section": {"type": "string"},
@@ -336,6 +357,11 @@ class Mcp(StoreCase):
         self.assertEqual(tail["result"]["content"][0]["text"], "- 2026-01-09 — from the desktop")
         self.assertEqual([(row["verb"], row["actor"]) for row in self.audit()], [("log", "tester")])
 
+    def test_doctor(self):
+        reply, = self.talk(self.tool(1, "ctx_doctor"))
+        self.assertFalse(reply["result"]["isError"])
+        self.assertIn(f"store: {os.path.realpath(self.store)} (markdown, from env)", reply["result"]["content"][0]["text"])
+
     def test_failures_are_tool_results(self):
         replies = self.talk(
             self.tool(1, "ctx_log", doc="epics/none", text="x"),
@@ -355,7 +381,7 @@ class Mcp(StoreCase):
             self.request(1, "tools/call", name="rm", arguments={}),
             self.request(2, "resources/list"),
             {"id": 3, "method": "ping"},
-            self.request(4, "tools/call", name="ctx_doctor", arguments={}))
+            self.request(4, "tools/call", name="ctx_maintain", arguments={}))
         self.assertEqual([reply["error"]["code"] for reply in replies], [-32700, -32602, -32601, -32600, -32602])
         self.assertEqual([reply["id"] for reply in replies], [None, 1, 2, None, 4])
 

@@ -366,7 +366,7 @@ Exit 0; 2 `NO_SUCH_DOC`; 3 `AMBIGUOUS_SELECTOR`.
 
 ### find
 
-ctx find [<query>] [--type <type>] [--tag <tag>] [--budget <bytes>] [--full] [--out -|auto]
+ctx find [<query>] [--type <type>] [--tag <tag>] [--where <conditions>] [--budget <bytes>] [--full] [--out -|auto]
 
 One row per hit, best first: `key · title · updated · summary` (≤ 80
 characters), then `· § <section>` when one `##` section holds the terms.
@@ -380,6 +380,14 @@ weight is how few docs hold it; a word that no doc holds, or every doc, weighs
 nothing. Matching folds case, ignores a
 plural `s` on a word and the `-` and `_` inside words: `orders` finds `Order
 model`, `rollout` finds `roll-out`. It does not know synonyms.
+
+`--where` keeps the docs whose frontmatter meets every condition, separated
+by commas: `field=value`, `field!=value`, `field>=value`, `field<=value`
+(`status=active,updated>=2026-01-01`). A list field meets `=` when it holds
+the value. `>=` and `<=` compare as text, which orders dates and timestamps.
+A doc without the field meets only `!=`. A value cannot hold a comma. A query
+is not needed with `--where`,
+`--type` or `--tag`.
 
 Hits are ranked by where each term occurs (key and title, then tags and
 headings, then the rest), by how few docs hold the term, and higher when the

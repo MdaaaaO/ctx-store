@@ -198,3 +198,36 @@ def rank(hits, found, query, total, holders):
         scored.append((round(score, 3), hit))
     scored.sort(key=lambda pair: (not pair[1].full, -pair[0], pair[1].key))
     return scored
+
+
+CONDITION = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*(!=|>=|<=|=)\s*(.*)$")
+
+
+def conditions(text):
+    """The conditions of `--where`: `field=value`, `!=`, `>=`, `<=`, separated
+    by commas. None when the text is not that."""
+    found = []
+    for part in text.split(","):
+        match = CONDITION.match(part.strip())
+        if not match or match.group(3).startswith("="):  # `==` is a slip, not a value
+            return None
+        found.append((match.group(1), match.group(2), match.group(3).strip()))
+    return found
+
+
+def meets(fields, wanted):
+    """Whether a doc's frontmatter meets every condition. A list field meets
+    `=` when it holds the value. `>=` and `<=` compare as text, which orders
+    dates and timestamps; a doc without the field meets only `!=`."""
+    for field, how, value in wanted:
+        held = fields.get(field)
+        values = held if isinstance(held, list) else [] if held in (None, "") else [held]
+        if how == "=":
+            ok = value in values
+        elif how == "!=":
+            ok = value not in values
+        else:
+            ok = bool(values) and all(v >= value if how == ">=" else v <= value for v in values)
+        if not ok:
+            return False
+    return True

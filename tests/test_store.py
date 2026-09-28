@@ -231,10 +231,6 @@ class Log(StoreCase):
         self.put("epics/empty", self.text(EPIC).split("## Session log")[0] + "## Session log\n<!-- none yet -->\n")
         self.assertEqual(self.run_ctx("log", "epics/empty", "first")[0], 0)
         self.assertTrue(self.text("epics/empty").endswith("## Session log\n<!-- none yet -->\n- 2026-01-08 — first\n"))
-        rules["log"]["order"] = "sideways"
-        with open(schema, "w") as handle:
-            json.dump(rules, handle)
-        self.fails(self.run_ctx("log", EPIC, "x"), 3, "SCHEMA_VIOLATION log.order: schema violation")
 
     def test_ledger(self):
         self.assertEqual(self.run_ctx("log", "ledger", "| 2026-01-08 | appended |")[0], 0)
@@ -277,6 +273,25 @@ class Log(StoreCase):
         self.assertEqual(self.text(EPIC), before)
         self.assertEqual(self.audit(), [])
         self.assertEqual(self.run_ctx("log", EPIC, "the token was rotated, see the vault")[0], 0)
+
+    def test_an_ignored_path_is_not_a_doc(self):
+        self.put("README", "---\ntitle: R\ntype: reference\n---\n\n## Log\n")
+        before = self.text("README")
+        for verb in (("log", "README", "--section", "Log", "x"), ("fm", "README", "title", "x"), ("brief", "README")):
+            self.fails(self.run_ctx(*verb), 2, "NO_SUCH_DOC README: no such doc")
+        self.assertEqual(self.text("README"), before)
+        self.assertEqual(self.audit(), [])
+
+    def test_a_broken_type_schema_is_one_error_line(self):
+        schema = os.path.join(self.store, ".ctx", "types", "epic.json")
+        for broken in ('{"log": {"section": "Session log", "grammar": "("}}', '{"log": {"order": "sideways"}}',
+                       '{"frontmatter": []}', '{"frontmatter": {"title": "required"}}', '{"sections": [1]}',
+                       '{"log": {"grammar": 5}}', '[]', '{'):
+            with open(schema, "w") as handle:
+                handle.write(broken)
+            for verb in (("validate",), ("log", EPIC, "x"), ("fm", EPIC, "status", "done"), ("brief", EPIC)):
+                self.fails(self.run_ctx(*verb), 3, "SCHEMA_VIOLATION .ctx/types/epic.json: schema violation")
+        self.assertEqual(self.audit(), [])
 
     def test_generated(self):
         self.put("INDEX", "---\ntitle: I\ntype: reference\n---\n\n## Log\n")

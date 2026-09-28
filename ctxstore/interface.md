@@ -75,7 +75,7 @@ The exit status and `error.code` are the first one's.
 |---|---|---|
 | `CTX_STORE` | walk up from the working directory | Store root, or a list separated like `PATH`; `--store` overrides it |
 | `CTX_NO_WALK` | unset | `1` turns the walk up off: without `CTX_STORE` or `--store` the result is `NO_STORE`. For tests, worktrees and temporary directories below a live store |
-| `CTX_ACTOR` | `$USER` | Who writes: the name of the audit file and of every row in it. Letters, digits, `.`, `_`, `-` |
+| `CTX_ACTOR` | `$USER` | Who writes: the name of the audit file and of every row in it. 1 to 64 of letters, digits, `.`, `_`, `-`; the first a letter or digit |
 | `CTX_LOCK_MODE` | probed | `flock` or `mkdir` forces the lock mode |
 | `CTX_LOCK_TIMEOUT` | `10` | Seconds a write waits for the lock before exit 4 |
 | `CTX_CACHE_DIR` | `$XDG_CACHE_HOME/ctx`, else `~/.cache/ctx` | Optional cache; never required, never created by a read |
@@ -109,7 +109,7 @@ it names, else to the first store.
 
 | Path | Holds |
 |---|---|
-| `ctx-store.json` | `schema_version`, and optionally `generated` and `ignore`: lists of glob patterns over doc paths. A generated doc is not validated and not writable (`GENERATED`); an ignored one is not a doc. `resolve`: `key_regex`, `fields`, `section` (see `ctx help resolve`) |
+| `ctx-store.json` | `schema_version`, and optionally `generated` and `ignore`: lists of glob patterns over doc paths. A generated doc is not validated and not writable (`GENERATED`); an ignored one is not a doc: every verb answers `NO_SUCH_DOC` for it. `resolve`: `key_regex`, `fields`, `section` (see `ctx help resolve`) |
 | `**/*.md` | The docs. A doc's key is its path without `.md` (`reference/lock-modes`) |
 | `.ctx/types/<type>.json` | One schema per doc type |
 | `.ctx/templates/<type>.md` | The scaffold of a new doc of the type; `{{TITLE}}` `{{TYPE}}` `{{DATE}}` `{{KEY}}` `{{SLUG}}` are filled in |
@@ -135,6 +135,10 @@ A type schema is a JSON object; every key is optional:
 | `sections` | `##` headings every doc of the type has |
 | `log` | `section`: where `log` adds its entry; `order`: `oldest-first` (default, the entry goes last) or `newest-first` (the entry goes first); `grammar`: a regular expression every line of that section matches; `ledger: true`: `log` appends raw lines at the end of the doc |
 | `owner` | The field that names the doc's owner; a write by another actor fails with `NOT_OWNER` |
+
+A schema that cannot be applied (not an object, a key of the wrong shape, a
+`grammar` that is not a regular expression) fails every verb on the store
+with `SCHEMA_VIOLATION .ctx/types/<type>.json`.
 
 A doc of a type without a schema gets the general checks only: frontmatter
 parses, a type is known, no `##` heading appears twice.

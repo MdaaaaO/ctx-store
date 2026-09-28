@@ -45,7 +45,7 @@ Registered redirect addresses are limited to Claude's callback
 | `CTX_SERVE_PORT` | `8377` | port on this machine |
 | `CTX_SERVE_BIND` | `127.0.0.1` | address to bind; change it only behind a proxy you trust |
 | `CTX_SERVE_ORIGINS` | unset | more allowed `Origin` values, comma-separated; `https://claude.ai` and `https://claude.com` always are |
-| `CTX_SERVE_STATE` | `$XDG_STATE_HOME/ctx-serve/state.json` | registered clients and the digests of codes and tokens; mode 600, never inside the store |
+| `CTX_SERVE_STATE` | `$XDG_STATE_HOME/ctx-serve/state.json`; without `XDG_STATE_HOME`, `~/.local/state/ctx-serve/state.json` | registered clients and the digests of codes and tokens; mode 600, never inside the store |
 | `CTX_ACTOR` | `connector` | the name writes are recorded under |
 
 The state file holds sha256 digests. The passphrase, the bearer token and the tokens handed out are
@@ -53,10 +53,14 @@ not in it.
 
 ## Run it behind a tunnel
 
-1. Pick a tunnel that gives you a stable `https://` address for a local port. Two that do:
-   `cloudflared tunnel --url http://127.0.0.1:8377` (Cloudflare Tunnel) and
-   `tailscale funnel 8377` (Tailscale Funnel). Use a named tunnel: an address that changes on every
-   start means adding the connector again each time.
+1. Pick a tunnel that gives you an `https://` address for a local port.
+
+   | Tunnel | Address | For |
+   |---|---|---|
+   | `cloudflared tunnel --url http://127.0.0.1:8377` (a quick tunnel, no account) | new on every start | a first test: the connector has to be added again after each restart |
+   | a named Cloudflare Tunnel, or `tailscale funnel 8377` | stays the same | use |
+
+   Start the tunnel first: the server needs its address.
 2. Start the server with that address:
 
    ```sh

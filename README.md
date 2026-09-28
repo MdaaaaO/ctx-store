@@ -1,11 +1,12 @@
 # ctx-store
 
 `ctx` is a markdown context store for coding agents: one folder of `*.md` rows with YAML frontmatter as
-the schema, a CLI with validated structured writes (`log`, `fm`, `row`, `new`, `move`), budgeted reads
+the schema, a CLI with validated structured writes (`log`, `fm`, `new`, `move`), budgeted reads
 (`brief`, `find --budget`, `resolve`, `get --section --tail`), a per-actor audit trail and a maintenance
 pass (`validate`, `doctor`, `maintain`, `migrate`). The same core serves three front-ends: the CLI (Claude
 Code hooks and skills call it), an Anthropic memory-tool handler (`view create str_replace insert delete
-rename`) and an MCP server (stdio for Claude Desktop; HTTP later).
+rename`) and an MCP server (stdio for Claude Desktop; HTTP with authentication for claude.ai, as a
+separate package).
 
 Production-grade by design: Python stdlib only (≥ 3.10), runs from a plain copy with no install, fixed
 exit-code table, `--json` envelope (`"api": 1`), temp + rename writes under a lock, secret guard on every
@@ -50,6 +51,25 @@ Every call a harness hook needs is one line. A write names its store; a read may
 {"mcpServers": {"ctx": {"command": "/path/to/ctx-store/ctx", "args": ["mcp"],
   "env": {"CTX_STORE": "/path/to/store", "CTX_ACTOR": "desktop"}}}}
 ```
+
+On Windows with the store and `ctx` inside WSL, Claude Desktop starts it through `wsl.exe`, and the
+environment goes into the arguments:
+
+```json
+{"mcpServers": {"ctx": {"command": "wsl.exe",
+  "args": ["-e", "env", "CTX_STORE=/home/you/store", "CTX_ACTOR=desktop", "CTX_NO_WALK=1",
+           "/home/you/ctx-store/ctx", "mcp"]}}}
+```
+
+| Install | `claude_desktop_config.json` is in |
+|---|---|
+| Windows, installer | `%APPDATA%\Claude\` |
+| Windows, Microsoft Store | `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\` |
+| macOS | `~/Library/Application Support/Claude/` |
+
+Tested with the Microsoft Store install on Windows with WSL2: the tools are listed, and `brief`, `find`
+and `log` work. The other two rows are where Claude Desktop documents its config; they were not tested
+here.
 
 Every built verb is a tool (`ctx_brief`, `ctx_find`, `ctx_log`, …). `ctx memory` takes the input of
 Anthropic's memory tool on stdin.

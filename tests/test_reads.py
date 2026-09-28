@@ -545,6 +545,13 @@ class Mcp(StoreCase):
             "properties": {"doc": {"type": "string"}, "text": {"type": "string"}, "section": {"type": "string"},
                            "date": {"type": "string"}}})
         self.assertTrue(tools["ctx_log"]["description"].startswith("ctx log <doc> <text>"))
+        # the help is the command line's; what differs over MCP is said after it
+        self.assertTrue(tools["ctx_log"]["description"].endswith(
+            "Over MCP. Parameters named in angle brackets above are, in order: doc, text. "
+            "Not offered over MCP: --from (files of the server's machine)."))
+        self.assertTrue(tools["ctx_rename"]["description"].startswith("ctx rename <doc> <to>"))
+        self.assertIn("in order: doc, to.", tools["ctx_rename"]["description"])
+        self.assertNotIn("Over MCP", tools["ctx_doctor"]["description"])
         self.assertEqual(tools["ctx_get"]["inputSchema"]["required"], ["doc"])
         self.assertTrue(tools["ctx_get"]["description"].startswith("ctx get <doc>[,<doc>…]"))
         self.assertEqual(self.talk(self.request(1, "initialize", protocolVersion="1999-01-01"))[0]["result"]["protocolVersion"],

@@ -290,7 +290,7 @@ Exit codes as for `log`.
 
 ### rename
 
-ctx rename <doc> <new>
+ctx rename <doc> <to>
 
 Rename a doc and rewrite the links to it: relative markdown links
 (`[x](../a/b.md#part)`) and wikilinks of its key or name (`[[b]]`). The
@@ -342,7 +342,7 @@ Exit codes as for `log`; 3 `DOC_EXISTS`.
 
 ### move
 
-ctx move <doc> <new>
+ctx move <doc> <to>
 
 `rename` under the name of the structured write; the audit rows say `move`.
 

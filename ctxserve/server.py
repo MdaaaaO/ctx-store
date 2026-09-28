@@ -18,6 +18,8 @@ from .auth import Auth, Refused, State
 LIMIT = 1024 * 1024  # bytes of a request body
 PROTOCOLS = mcp.PROTOCOLS
 ORIGINS = ("https://claude.ai", "https://claude.com")
+METHODS = ("GET", "POST", "DELETE", "PUT", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT")
+ROUTES = ("/mcp", "/authorize", "/token", "/register", "/.well-known/oauth-authorization-server")
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>ctx: allow access</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -51,9 +53,26 @@ class Handler(BaseHTTPRequestHandler):
 
     # --- plumbing ---
 
-    def log_message(self, pattern, *args):
+    # The log holds the method, the path and the status, and only when the server knows them:
+    # another method is `?`, another path `/…`. Nothing else a client sends is written. A
+    # request line can carry a token, and a malformed one can carry anything.
+
+    def log_request(self, code="-", size="-"):
         if self.server.log:
-            self.server.log.write("%s %s\n" % (self.address_string(), pattern % args))
+            status = getattr(code, "value", code)
+            method = self.command if self.command in METHODS else "?"
+            try:
+                route = self.route
+            except (AttributeError, ValueError):
+                route = ""
+            known = route in ROUTES or route.startswith("/.well-known/oauth-protected-resource")
+            self.server.log.write(f"{self.address_string()} {method} {route if known else '/…'} {status}\n")
+
+    def log_error(self, pattern, *args):
+        pass  # the refusal is logged with its status by log_request, in the one shape
+
+    def log_message(self, pattern, *args):
+        pass
 
     def send(self, status, body=b"", kind="application/json", headers=()):
         if isinstance(body, (dict, list)):
@@ -71,7 +90,8 @@ class Handler(BaseHTTPRequestHandler):
         for name, value in headers:
             self.send_header(name, value)
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":  # the answer to HEAD is its headers
+            self.wfile.write(body)
 
     def refuse(self, failure):
         self.send(failure.status, {"error": failure.code, "error_description": failure.text})
@@ -81,6 +101,8 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", ""))
         except ValueError:
             size = -1
+        if self.headers.get("Transfer-Encoding"):
+            size = -1  # a body without a length is not read
         if size < 0 or size > LIMIT:
             self.close_connection = True
             self.send(413 if size > LIMIT else 411, {"error": "invalid_request"})
@@ -101,6 +123,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         auth, route = self.server.auth, self.route
+        self.unread()
         if not self.origin_ok():
             return self.send(403, {"error": "origin not allowed"})
         if route.startswith("/.well-known/oauth-protected-resource") and auth.secret:
@@ -126,22 +149,39 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200, text, "text/html; charset=utf-8",
                   headers=[("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'")])
 
+    def unread(self):
+        """A request whose body is not read cannot share its connection: what is
+        left of it would be taken for the next request."""
+        if self.headers.get("Content-Length", "0").strip() not in ("", "0") or self.headers.get("Transfer-Encoding"):
+            self.close_connection = True
+
     def do_DELETE(self):
+        self.unread()
         self.send(405 if self.route == "/mcp" else 404, {"error": "not allowed"}, headers=[("Allow", "POST")])
+
+    def refuse_method(self):
+        """A method this server has no use for. Its body is not read, so the
+        connection ends with the answer."""
+        self.close_connection = True
+        self.send(405, {"error": "not allowed"}, headers=[("Allow", "POST"), ("Connection", "close")])
+
+    do_PUT = do_PATCH = do_HEAD = do_OPTIONS = do_TRACE = do_CONNECT = refuse_method
 
     # --- POST ---
 
     def do_POST(self):
         auth, route = self.server.auth, self.route
-        if not self.origin_ok() and not (route == "/authorize" and self.headers.get("Origin") == auth.url):
-            return self.send(403, {"error": "origin not allowed"})
-        if route == "/mcp":
-            return self.rpc()
-        if not auth.secret or route not in ("/register", "/authorize", "/token"):
-            return self.send(404, {"error": "not found"})
+        # The body is read before anything is decided, so a refusal leaves the connection
+        # clean for the request that follows on it. It is bounded by LIMIT.
         raw = self.body()
         if raw is None:
             return None
+        if not self.origin_ok() and not (route == "/authorize" and self.headers.get("Origin") == auth.url):
+            return self.send(403, {"error": "origin not allowed"})
+        if route == "/mcp":
+            return self.rpc(raw)
+        if not auth.secret or route not in ("/register", "/authorize", "/token"):
+            return self.send(404, {"error": "not found"})
         try:
             if route == "/register":
                 try:
@@ -159,17 +199,13 @@ class Handler(BaseHTTPRequestHandler):
                                  "text/html; charset=utf-8")
             return self.refuse(failure)
 
-    def rpc(self):
+    def rpc(self, raw):
         auth = self.server.auth
         if not auth.allows(self.headers.get("Authorization")):
-            self.close_connection = True
             return self.send(401, {"error": "unauthorized"}, headers=[("WWW-Authenticate", auth.challenge())])
         version = self.headers.get("MCP-Protocol-Version")
         if version is not None and version not in PROTOCOLS:
             return self.send(400, {"error": "unsupported MCP-Protocol-Version"})
-        raw = self.body()
-        if raw is None:
-            return None
         try:
             message = json.loads(raw)
         except ValueError:

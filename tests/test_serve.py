@@ -149,6 +149,73 @@ class Unauthenticated(ServeCase):
                                    headers={"Origin": "http://127.0.0.1:8377"})[0], 403)
 
 
+class Connection(ServeCase):
+    """A tunnel sends many requests over one connection."""
+
+    def talk(self, *requests):
+        """Statuses of requests sent one after the other on one connection."""
+        link = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        statuses = []
+        try:
+            for method, path, body, headers in requests:
+                link.request(method, path, body=body, headers=headers)
+                reply = link.getresponse()
+                reply.read()
+                statuses.append(reply.status)
+        finally:
+            link.close()
+        return statuses
+
+    def test_a_refused_request_does_not_spoil_the_next(self):
+        ping = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"})
+        good = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+        self.assertEqual(self.talk(
+            ("POST", "/mcp", ping, {"Content-Type": "application/json"}),
+            ("POST", "/mcp", ping, {**good, "Origin": "https://evil.example"}),
+            ("POST", "/mcp", ping, {**good, "MCP-Protocol-Version": "1999-01-01"}),
+            ("POST", "/nothing", ping, good),
+            ("POST", "/mcp", "not json", good),
+            ("POST", "/token", "grant_type=nothing", {"Content-Type": "application/x-www-form-urlencoded"}),
+            ("POST", "/mcp", ping, good),
+        ), [401, 403, 400, 404, 400, 400, 200])
+
+    def test_a_body_that_is_not_read_ends_the_connection(self):
+        for method in ("GET", "DELETE", "PUT", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT", "BREW"):
+            with socket.create_connection(("127.0.0.1", self.port), timeout=10) as link:
+                link.sendall((f"{method} /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello"
+                              f"POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n").encode())
+                data = b""
+                while True:
+                    part = link.recv(4096)
+                    if not part:
+                        break
+                    data += part
+                self.assertEqual(data.count(b"HTTP/1.1 "), 1, method)
+                self.assertTrue(data.startswith(b"HTTP/1.1 501" if method == "BREW" else b"HTTP/1.1 405"), method)
+                head, _, body = data.partition(b"\r\n\r\n")
+                if method == "HEAD":
+                    self.assertEqual(body, b"")  # the answer to HEAD is its headers
+                elif method != "BREW":  # a method nobody knows is answered by the library's own page
+                    self.assertIn(b"error", body, method)
+
+    def test_the_log_holds_no_query_and_no_request_text(self):
+        import io
+        self.server.log = io.StringIO()
+        self.call("POST", "/mcp?token=" + TOKEN, {"jsonrpc": "2.0", "id": 1, "method": "ping"})
+        self.call("GET", "/authorize?client_id=secret-looking-value&state=" + SECRET.replace(" ", "+"))
+        self.rpc({"jsonrpc": "2.0", "id": 1, "method": "ping"})
+        self.call("GET", "/" + TOKEN + "/mcp")
+        with socket.create_connection(("127.0.0.1", self.port), timeout=10) as link:
+            link.sendall(f"{TOKEN} /mcp HTTP/1.1\r\nHost: x\r\n\r\n".encode())
+            link.recv(4096)
+        text = self.server.log.getvalue()
+        self.assertEqual(text.splitlines(), ["127.0.0.1 POST /mcp 401", "127.0.0.1 GET /authorize 400",
+                                             "127.0.0.1 POST /mcp 200", "127.0.0.1 GET /… 404",
+                                             "127.0.0.1 ? /mcp 501"])
+        for value in (TOKEN, "secret-looking-value", "correct", "token=", "client_id", "state"):
+            self.assertNotIn(value, text)
+
+
 class Bearer(ServeCase):
     def test_brief_find_and_log(self):
         status, headers, reply = self.rpc({"jsonrpc": "2.0", "id": 7, "method": "initialize",

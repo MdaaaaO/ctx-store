@@ -254,7 +254,7 @@ def brief(store, params):
                         continue  # a doc that does not parse is `validate`'s to report
                     cells = [f"{mark} {key}", str(near.fields.get("title") or near.fields.get("session") or "-"),
                              str(near.fields.get("updated") or near.fields.get("heartbeat") or "-"),
-                             search.Hit(key, near, []).summary([], None, 80) or "-"]
+                             search.Hit(key, near, []).summary([], None, search.SUMMARY) or "-"]
                     lines.append(" · ".join(cells))
     kept, truncated = _fit(lines, _budget(params))
     text = "\n".join(kept)

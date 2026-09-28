@@ -7,7 +7,6 @@ from .contract import CtxError
 from .store import HEAD, Doc, head_fields
 from .verbs import FULL, _budget, _fit
 
-SUMMARY = 80
 
 
 def _holding(stores, key):
@@ -104,7 +103,7 @@ def _summary(doc, needle):
             first = plain
             break
     first = first or ""
-    return first if len(first) <= SUMMARY else first[: SUMMARY - 1].rstrip() + "…"
+    return first if len(first) <= search.SUMMARY else first[: search.SUMMARY - 1].rstrip() + "…"
 
 
 def _row(prefix, doc, needle=""):
@@ -234,7 +233,7 @@ def find(stores, params, config):
             "doc": hit.prefix + hit.key,
             "title": str(doc.fields.get("title") or doc.fields.get("session") or "-"),
             "updated": str(doc.fields.get("updated") or doc.fields.get("heartbeat") or "-"),
-            "summary": hit.summary(held, section, SUMMARY) or "-",
+            "summary": hit.summary(held, section, search.SUMMARY) or "-",
             "section": section,
             "score": score,
             "terms": len(held),

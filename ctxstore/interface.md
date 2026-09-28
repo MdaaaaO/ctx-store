@@ -360,7 +360,8 @@ missing.
   (relative markdown links and wikilinks). That reads every doc of the store.
   With `--near`, one line for each of those docs: `→` for a doc it links
   to, `←` for a doc that links to it, then `key · title · updated ·
-  summary`. The doc and what is around it, inside the one budget.
+  summary`. The doc and what is around it, inside the one budget. It
+  reads every doc of the store too, with or without `--links`.
 - `--registry`: one line per session that has not ended: name, status, epic,
   what it is working on, heartbeat.
 - `--session <id>`: that session's doc, as for `<doc>`, then its body.

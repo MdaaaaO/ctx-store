@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. Generated b
 [conventional-release](https://github.com/MdaaaaO/conventional-release) from
 [Conventional Commits](https://www.conventionalcommits.org).
 
+## 0.4.0 (2026-09-28)
+
+
+### Features
+
+* **core:** ctx init --upgrade replaces only files init last wrote (#57) ([#58](https://github.com/MdaaaaO/ctx-store/issues/58)) ([e94d934](https://github.com/MdaaaaO/ctx-store/commit/e94d934afc32659e32da69954383b2d909a7517b))
+
 ## 0.3.0 (2026-09-28)
 
 

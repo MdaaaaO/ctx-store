@@ -54,15 +54,14 @@ def _slice(doc, params):
 def get(stores, params, config):
     if "tail" in params and params["tail"] < 1:
         raise CtxError("USAGE", "--tail")
-    if ("doc" in params) == ("docs" in params):
-        raise CtxError("USAGE", "doc")
-    if "doc" in params:
-        doc = _holding(stores, params["doc"]).load(params["doc"])
+    given = params["doc"]
+    if "," not in given or any(store.has(given) for store in stores):  # a key may hold a comma
+        doc = _holding(stores, given).load(given)
         data, text = _deliver(params, config, doc.key.replace("/", "--") + ".md", _slice(doc, params))
         return {"doc": doc.key, **data}, text
-    keys = [key.strip() for key in params["docs"].split(",") if key.strip()]
+    keys = [key.strip() for key in given.split(",") if key.strip()]
     if not keys or len(set(keys)) != len(keys):
-        raise CtxError("USAGE", "--docs")
+        raise CtxError("USAGE", "doc")
     docs = [_holding(stores, key).load(key) for key in keys]
 
     def part(doc):

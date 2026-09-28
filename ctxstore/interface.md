@@ -410,14 +410,14 @@ Exit 0; 1 `USAGE resolve.key_regex` when no store sets one; 2 `NO_SUCH_DOC`
 
 ### get
 
-ctx get <doc> | --docs <doc>,<doc>… [--section <heading>] [--tail <n>] [--budget <bytes>] [--full] [--out -|auto]
+ctx get <doc>[,<doc>…] [--section <heading>] [--tail <n>] [--budget <bytes>] [--full] [--out -|auto]
 
 One section of a doc, or its body; `--tail` keeps the last `n` entries
 (lines that are neither blank nor comments). Inside the byte budget
 (default 8192); `--out auto` as for `find`.
 
-`--docs` answers for several docs in one call, each under a line `== <doc>
-==`. The budget is the call's and is shared evenly, so one long doc cannot
+Several docs, separated by commas, are answered in one call, each under a
+line `== <doc> ==`. The budget is the call's and is shared evenly, so one long doc cannot
 crowd the others out. A doc that lacks the section says so in its part. A doc
 that does not exist, or that has the heading twice, fails the call.
 

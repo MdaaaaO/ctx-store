@@ -24,39 +24,40 @@ class Get(StoreCase):
         self.assertEqual(out, golden("get-body.txt", out))
 
     def test_several_docs_in_one_call(self):
-        code, out, err = self.run_ctx("get", "--docs", "epics/sample-rollout, reference/lock-modes", "--section", "Summary")
+        code, out, err = self.run_ctx("get", "epics/sample-rollout, reference/lock-modes", "--section", "Summary")
         self.assertEqual((code, err), (0, ""))
         self.assertEqual(out, "== epics/sample-rollout ==\nNO_SUCH_SECTION Summary: no such section\n"
                               "== reference/lock-modes ==\n`flock` on local filesystems, the `mkdir` lock where flock cannot be proven.\n")
-        out = self.run_ctx("get", "--docs", f"{EPIC},ledger", "--section", "Session log", "--tail", "1")[1]
+        out = self.run_ctx("get", f"{EPIC},ledger", "--section", "Session log", "--tail", "1")[1]
         self.assertIn("== epics/sample-rollout ==\n- 2026-01-07 — region two done.\n== ledger ==\n", out)
-        data = json.loads(self.run_ctx("get", "--docs", f"{EPIC},ledger", "--json")[1])["data"]
+        data = json.loads(self.run_ctx("get", f"{EPIC},ledger", "--json")[1])["data"]
         self.assertEqual((data["docs"], data["truncated"]), ([EPIC, "ledger"], False))
 
     def test_several_docs_share_the_budget(self):
         self.put("reference/big", "---\ntitle: Big\ntype: reference\n---\n\n" + "a line of text\n" * 1000)
-        code, out, _ = self.run_ctx("get", "--docs", f"reference/big,{EPIC},ledger", "--budget", "900", "--json")
+        code, out, _ = self.run_ctx("get", f"reference/big,{EPIC},ledger", "--budget", "900", "--json")
         data = json.loads(out)["data"]
         self.assertLessEqual(data["bytes"], 900)
         self.assertTrue(data["truncated"])
         self.assertIn("== ledger ==\n# Ledger", data["text"])
         self.assertRegex(data["text"], r"== reference/big ==\n(a line of text\n)+… \d+ more lines, raise --budget\n== epics")
         scratch = os.path.join(self.work.name, "scratch")
-        path = self.run_ctx("get", "--docs", f"reference/big,ledger", "--out", "auto", CTX_SCRATCH=scratch)[1].strip()
+        path = self.run_ctx("get", f"reference/big,ledger", "--out", "auto", CTX_SCRATCH=scratch)[1].strip()
         with open(path) as handle:
             self.assertEqual(len(handle.read().splitlines()), 1000 + 2 + 5)
 
     def test_several_docs_failures(self):
-        self.fails(self.run_ctx("get", "--docs", f"{EPIC},epics/none"), 2, "NO_SUCH_DOC epics/none: no such doc")
-        self.fails(self.run_ctx("get", "--docs", f"{EPIC},../x"), 3, "PATH_ESCAPE ../x: path leaves the store")
-        self.fails(self.run_ctx("get", "--docs", f"{EPIC},{EPIC}"), 1, "USAGE --docs: bad command line")
+        self.fails(self.run_ctx("get", f"{EPIC},epics/none"), 2, "NO_SUCH_DOC epics/none: no such doc")
+        self.fails(self.run_ctx("get", f"{EPIC},../x"), 3, "PATH_ESCAPE ../x: path leaves the store")
+        self.fails(self.run_ctx("get", f"{EPIC},{EPIC}"), 1, "USAGE doc: bad command line")
         self.put("reference/twice", "---\ntitle: T\ntype: reference\n---\n\n## Goal\na\n\n## Goal\nb\n")
-        self.fails(self.run_ctx("get", "--docs", f"{EPIC},reference/twice", "--section", "Goal"), 3,
+        self.fails(self.run_ctx("get", f"{EPIC},reference/twice", "--section", "Goal"), 3,
                    "AMBIGUOUS_SELECTOR Goal: selector matches more than one target")
         self.fails(self.run_ctx("get", "reference/twice", "--section", "Goal"), 3,
                    "AMBIGUOUS_SELECTOR Goal: selector matches more than one target")
-        self.fails(self.run_ctx("get", "--docs", " , "), 1, "USAGE --docs: bad command line")
-        self.fails(self.run_ctx("get", EPIC, "--docs", "ledger"), 1, "USAGE doc: bad command line")
+        self.fails(self.run_ctx("get", " , "), 1, "USAGE doc: bad command line")
+        self.put("reference/a,b", "---\ntitle: Comma\ntype: reference\n---\n\na key with a comma\n")
+        self.assertEqual(self.run_ctx("get", "reference/a,b")[1], "a key with a comma\n")
         self.fails(self.run_ctx("get"), 1, "USAGE doc: bad command line")
 
     def test_failures(self):
@@ -520,9 +521,8 @@ class Mcp(StoreCase):
             "properties": {"doc": {"type": "string"}, "text": {"type": "string"}, "section": {"type": "string"},
                            "date": {"type": "string"}}})
         self.assertTrue(tools["ctx_log"]["description"].startswith("ctx log <doc> <text>"))
-        # one of two parameters is needed: said in the description, which a schema without `anyOf` cannot
-        self.assertEqual(tools["ctx_get"]["inputSchema"]["required"], [])
-        self.assertTrue(tools["ctx_get"]["description"].startswith("ctx get <doc> | --docs <doc>,<doc>…"))
+        self.assertEqual(tools["ctx_get"]["inputSchema"]["required"], ["doc"])
+        self.assertTrue(tools["ctx_get"]["description"].startswith("ctx get <doc>[,<doc>…]"))
         self.assertEqual(self.talk(self.request(1, "initialize", protocolVersion="1999-01-01"))[0]["result"]["protocolVersion"],
                          "2025-06-18")
 

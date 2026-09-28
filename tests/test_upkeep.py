@@ -293,6 +293,9 @@ class Git(UpkeepCase):
         if shutil.which("git") is None:
             self.skipTest("no git")
         self.git("init", "-q", "-b", "main")
+        # no clean-up in the background: it would still be writing when the test removes the store
+        self.git("config", "gc.auto", "0")
+        self.git("config", "maintenance.auto", "false")
         self.git("add", "-A")
         self.git("commit", "-q", "-m", "start")
         self.env.update(CTX_GIT="1", PATH=os.environ["PATH"], GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull)

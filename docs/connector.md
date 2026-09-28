@@ -81,6 +81,9 @@ not in it.
 
 ## What to know before you expose a store
 
+- The log (stderr) holds the method, the path and the status of each request, and only a method
+  and a path the server knows. Nothing else a client sent is written, so no token reaches it.
+
 - Whoever holds the passphrase, or a token, can read and write the whole store. There are no
   scopes and no read-only mode yet.
 - Tool results are text from your docs. A doc that holds instructions is read by the model as text

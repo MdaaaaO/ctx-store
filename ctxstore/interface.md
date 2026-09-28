@@ -369,8 +369,13 @@ ctx find [<query>] [--type <type>] [--tag <tag>] [--budget <bytes>] [--full] [--
 One row per hit, best first: `key · title · updated · summary` (≤ 80
 characters), then `· § <section>` when one `##` section holds the terms.
 
-The query is terms: words, and phrases in double quotes. A doc is a hit when
-every term occurs in its key or its text. Matching folds case, ignores a
+The query is terms: words, and phrases in double quotes; punctuation around
+a word is dropped. A doc is a hit when every term occurs in its key or its
+text. A query of four terms or more is read as a task, not a lookup: a doc
+that holds at least half of the query's weight is a hit too, listed behind the
+docs that hold every term, its row ending in `· <n> of <m> terms`. A term's
+weight is how few docs hold it; a word that no doc holds, or every doc, weighs
+nothing. Matching folds case, ignores a
 plural `s` on a word and the `-` and `_` inside words: `orders` finds `Order
 model`, `rollout` finds `roll-out`. It does not know synonyms.
 
@@ -380,11 +385,12 @@ terms occur as one phrase or in one section. Ties go by key. The 300 best
 candidates are ranked this way; hits past them follow in key order.
 
 Hits that do not fit the budget (default 4096) are folded into a count.
-`--json` adds `rows`: `doc` `title` `updated` `summary` `section` `score` for
-every hit shown. `--out auto` writes the whole result to a file in
+`--json` adds `rows`: `doc` `title` `updated` `summary` `section` `score`
+`terms` `of` for every hit shown. `--out auto` writes the whole result to a file in
 `$CTX_SCRATCH` and prints its path.
 
-find is a scan: there is no index to build or to lose.
+find is a scan: there is no index to build or to lose. Its cost grows with
+the store and with the number of terms.
 
 Exit 0 (no hit is `0 hits`); 1 `USAGE`.
 

@@ -86,7 +86,9 @@ not idle: compare a row with the first row of its own column. `python3 bench/ben
 p95, or when a lookup needs ranked search a scan cannot give. At 3 000 docs every `find` stays under
 200 ms. `find` matches terms and ranks its hits as part of the same scan (`ctx help find`), which
 finds 17 of the 18 lookups in `bench/eval/` where the phrase match before it found 6; the one it
-misses is a paraphrase, which an index of words would miss too. So the store has no index to build,
+misses is a paraphrase, which an index of words would miss too. A task described in a sentence
+or two finds its doc as well (7 of 7 in the eval). That is where the scan costs most: about 0.1 s for
+25 words on 225 docs, about 0.9 s on 3 000. So the store has no index to build,
 validate or lose. The question returns when a store passes 3 000 docs, or when lookups need
 synonyms.
 

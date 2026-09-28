@@ -114,7 +114,8 @@ def find(stores, params, config):
     wanted, seen, total = search.prepare(found), set(), 0
     holders = [0] * len(found)  # per term, the docs that hold it
     filtered = "type" in params or "tag" in params
-    likely = []  # (coarse rank, key, prefix, store, data): docs whose bytes hold every term
+    long = len(found) >= search.LONG
+    likely = []  # [coarse rank, key, prefix, data, mask]: docs that hold every term, or enough of them
     for number, store in enumerate(stores, 1):
         prefix = f"{number}:" if len(stores) > 1 else ""
         for key in store.keys():
@@ -123,7 +124,8 @@ def find(stores, params, config):
             seen.add(key)
             total += 1
             data = store.read(key, listed=True)
-            if not search.held(found, wanted, key, data, holders):
+            mask = search.held(found, wanted, key, data, holders)
+            if not all(mask) and not (long and sum(mask) >= 2):
                 continue
             low = key.lower()
             in_key = [search.holds(term, low, search.squeeze(low)) for term in found]
@@ -146,16 +148,22 @@ def find(stores, params, config):
                     continue  # a doc that does not parse is `validate`'s to report
             head = _head(data).lower()
             near = any(in_key) or any(plain is not None and plain in head for plain, _ in wanted)
-            likely.append((0 if near else 1, key, prefix, data))
+            likely.append([0 if near else 1, key, prefix, data, mask])
+    # A doc that holds most of a long query is a hit too, behind the ones that hold all of it.
+    rare = search.rarity(total, holders)
+    for one in likely:
+        share = 1.0 if all(one[4]) else search.covered(one[4], rare)
+        one[0] = (not all(one[4]), -round(share, 3), one[0])
+    likely = [one for one in likely if -one[0][1] >= search.COVERED]
     # Every hit is counted; the ones that can come first are scored in full.
     likely.sort(key=lambda one: one[:2])
     hits, later = [], []
-    for coarse, key, prefix, data in likely:
+    for coarse, key, prefix, data, mask in likely:
         if len(hits) >= search.SCORED:
-            later.append((key, prefix, data))
+            later.append((key, prefix, data, mask))
             continue
         try:
-            hit = search.Hit(key, Doc(key, data))
+            hit = search.Hit(key, Doc(key, data), mask)
         except CtxError:
             continue
         hit.prefix = prefix
@@ -166,28 +174,33 @@ def find(stores, params, config):
 
     def queue():
         yield from ranked
-        for key, prefix, data in later:
-            yield None, (key, prefix, data)
+        for key, prefix, data, mask in later:
+            yield None, (key, prefix, data, mask)
 
     for score, hit in queue():
         if limit is not None and used > limit:
             lines.append("")  # past the budget: counted, never shown
             continue
         if score is None:  # past the scored ones: made into a row only when it is shown
-            key, prefix, data = hit
-            hit = search.Hit(key, Doc(key, data))
+            key, prefix, data, mask = hit
+            hit = search.Hit(key, Doc(key, data), mask)
             hit.prefix = prefix
-        section = hit.section(found)[0] if found else None
+        held = [term for term, there in zip(found, hit.mask) if there]
+        section = hit.section(held)[0] if held else None
         doc = hit.doc
         row = {
             "doc": hit.prefix + hit.key,
             "title": str(doc.fields.get("title") or doc.fields.get("session") or "-"),
             "updated": str(doc.fields.get("updated") or doc.fields.get("heartbeat") or "-"),
-            "summary": hit.summary(found, section, SUMMARY) or "-",
+            "summary": hit.summary(held, section, SUMMARY) or "-",
             "section": section,
             "score": score,
+            "terms": len(held),
+            "of": len(found),
         }
         cells = [row["doc"], row["title"], row["updated"], row["summary"]] + ([f"§ {section}"] if section else [])
+        if not hit.full:
+            cells.append(f"{len(held)} of {len(found)} terms")
         lines.append(" · ".join(cells))
         rows.append(row)
         used += len(lines[-1].encode("utf-8")) + 1

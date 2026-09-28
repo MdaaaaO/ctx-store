@@ -111,6 +111,40 @@ class Find(StoreCase):
         scores = [row["score"] for row in data["rows"]]
         self.assertEqual(scores, sorted(scores, reverse=True))
 
+    def test_a_long_query_is_a_task(self):
+        self.put("reference/all", "---\ntitle: All\ntype: reference\n---\n\n## Notes\nThe quokka dag failed with a timeout on the warehouse.\n")
+        self.put("reference/most", "---\ntitle: Most\ntype: reference\n---\n\n## Runbook\nWhen the quokka dag failed with a timeout, rerun it.\n")
+        self.put("reference/one", "---\ntitle: One\ntype: reference\n---\n\nOnly a warehouse here.\n")
+        prompt = "Can you check why the quokka dag failed last night, was it a timeout on the warehouse?"
+        code, out, _ = self.run_ctx("find", prompt, "--json")
+        data = json.loads(out)["data"]
+        self.assertEqual([(row["doc"], row["section"]) for row in data["rows"]],
+                         [("reference/all", "Notes"), ("reference/most", "Runbook")])
+        self.assertGreater(data["rows"][0]["terms"], data["rows"][1]["terms"])
+        self.assertEqual(data["rows"][0]["of"], 15)  # 17 words: "the" twice, and "a" is no term
+        lines = data["text"].split("\n")
+        self.assertEqual(lines[0], "2 hits")
+        self.assertRegex(lines[1], r"^reference/all · All · - · .* · § Notes · \d+ of 15 terms$")
+        self.assertRegex(lines[2], r"^reference/most · Most · - · .* · § Runbook · \d+ of 15 terms$")
+
+    def test_a_short_query_needs_every_term(self):
+        self.put("reference/most", "---\ntitle: Most\ntype: reference\n---\n\nThe quokka dag failed.\n")
+        self.assertEqual(self.run_ctx("find", "quokka dag timeout")[1], "0 hits\n")
+        self.assertEqual(self.run_ctx("find", "quokka dag failed")[1].split("\n")[0], "1 hits")
+        self.assertNotIn(" terms", self.run_ctx("find", "quokka dag failed")[1])
+
+    def test_a_doc_that_holds_every_term_comes_first(self):
+        self.put("reference/a-most", "---\ntitle: Quokka dag\ntype: reference\n---\n\n## Quokka dag\nquokka dag failed, quokka dag failed.\n")
+        self.put("reference/z-all", "---\ntitle: Z\ntype: reference\n---\n\nquokka dag failed after a timeout\n")
+        out = self.run_ctx("find", "quokka dag failed timeout")[1].split("\n")
+        self.assertEqual([line.split(" · ")[0] for line in out[1:3]], ["reference/z-all", "reference/a-most"])
+
+    def test_punctuation_around_words(self):
+        self.put("reference/p", "---\ntitle: P\ntype: reference\n---\n\nYesterday an outage; the quokka glitch.\n")
+        for query in ("quokka,", "(quokka)", "glitch?", "yesterday's", "outage; quokka!", "'quokka'"):
+            self.assertEqual(self.run_ctx("find", "--", query)[1].split("\n")[0], "1 hits", query)
+        self.fails(self.run_ctx("find", "--", "? , a"), 1, "USAGE query: bad command line")
+
     def test_a_rare_term_counts_for_more(self):
         for number in range(12):
             self.put(f"reference/c{number:02}", f"---\ntitle: Common {number}\ntype: reference\n---\n\ncommon word\n")

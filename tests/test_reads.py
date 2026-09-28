@@ -555,7 +555,7 @@ class Mcp(StoreCase):
         self.assertEqual(tools["ctx_get"]["inputSchema"]["required"], ["doc"])
         self.assertTrue(tools["ctx_get"]["description"].startswith("ctx get <doc>[,<doc>…]"))
         self.assertEqual(self.talk(self.request(1, "initialize", protocolVersion="1999-01-01"))[0]["result"]["protocolVersion"],
-                         "2025-06-18")
+                         "2025-11-25")
 
     def test_brief_find_and_log(self):
         brief, find, log, tail = self.talk(

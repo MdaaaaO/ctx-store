@@ -8,7 +8,7 @@ import json
 from . import __version__, spec
 from .contract import CtxError
 
-PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
+PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 KINDS = {"text": "string", "int": "integer", "flag": "boolean"}
 HIDDEN = ("from", "out")  # files of the server's machine are not the client's
 

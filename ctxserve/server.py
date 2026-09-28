@@ -57,6 +57,10 @@ class Handler(BaseHTTPRequestHandler):
     # another method is `?`, another path `/…`. Nothing else a client sends is written. A
     # request line can carry a token, and a malformed one can carry anything.
 
+    def parse_request(self):
+        self.why = ""  # a reason belongs to one request; a connection carries many
+        return super().parse_request()
+
     def log_request(self, code="-", size="-"):
         if self.server.log:
             status = getattr(code, "value", code)
@@ -66,7 +70,8 @@ class Handler(BaseHTTPRequestHandler):
             except (AttributeError, ValueError):
                 route = ""
             known = route in ROUTES or route.startswith("/.well-known/oauth-protected-resource")
-            self.server.log.write(f"{self.address_string()} {method} {route if known else '/…'} {status}\n")
+            why = f" {self.why}" if getattr(self, "why", "") else ""
+            self.server.log.write(f"{self.address_string()} {method} {route if known else '/…'} {status}{why}\n")
 
     def log_error(self, pattern, *args):
         pass  # the refusal is logged with its status by log_request, in the one shape
@@ -212,12 +217,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(401, {"error": "unauthorized"}, headers=[("WWW-Authenticate", auth.challenge())])
         version = self.headers.get("MCP-Protocol-Version")
         if version is not None and version not in PROTOCOLS:
-            return self.send(400, {"error": "unsupported MCP-Protocol-Version"})
+            self.why = "protocol-version"  # the server's word for the refusal, never the client's text
+            return self.send(400, {"error": "unsupported MCP-Protocol-Version", "supported": list(PROTOCOLS)})
         try:
             message = json.loads(raw)
         except ValueError:
+            self.why = "not-json"
             return self.send(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
         if isinstance(message, list):
+            self.why = "batch"
             return self.send(400, {"jsonrpc": "2.0", "id": None,
                                    "error": {"code": -32600, "message": "one message per request"}})
         reply = mcp.respond(message, self.server.environ, None)

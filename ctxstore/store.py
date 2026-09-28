@@ -166,6 +166,8 @@ class Store:
         key = self.key(key)
         if self.generated(key):
             raise CtxError("GENERATED", key)
+        if self.backend.read_only():
+            raise CtxError("STORE_READONLY", self.locator)
         secrets.scan(payload)
         with self.locked():
             return self.apply(verb, key, change, now, actor, check)

@@ -121,6 +121,8 @@ class Memory(unittest.TestCase):
         fixture_space("frozen", read_only=True)
         self.assertEqual(run(("log", EPIC, "x"), "memory://frozen"),
                          (5, "", "STORE_READONLY memory://frozen: store is read-only or unwritable\n"))
+        self.assertEqual(run(("log", EPIC, "--", "ghp_" + "a" * 36), "memory://frozen"),
+                         (5, "", "STORE_READONLY memory://frozen: store is read-only or unwritable\n"))
         self.assertEqual(run(("brief", "--registry"), "memory://frozen")[0], 0)
 
     def test_lock_timeout(self):

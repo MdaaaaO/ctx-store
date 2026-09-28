@@ -12,16 +12,24 @@
 | ticket-to-doc | single-term | `EX-202` | 2 | rank 1 |
 | ticket-cited-elsewhere | ranking | `EX-101` | 3 | rank 1 |
 | initiative-reworded | variant | `checkout rollout` | 2 | rank 1 |
-| initiative-by-goal | multi-term | `new checkout every region` | 1 | rank 1 |
+| initiative-by-goal | multi-term | `new checkout every region` | 2 | rank 1 |
 | role-access | multi-term | `analyst billing write` | 1 | rank 1 |
 | repo-routing | multi-term | `shop-models channel labels` | 1 | rank 1 |
 | decision-in-meeting | multi-term | `fallback provider two weeks` | 1 | rank 1 |
 | tag-exact | single-term | `payments` | 3 | rank 1 |
 | phrase-exact | single-term | `Known traps to check on every PR` | 1 | rank 1 |
+| prompt-paged | task-prompt | `We got paged again last night because the orders_daily load_orders task timed out, can you check whether this is a known issue and what we usually do about it` | 1 | rank 1 |
+| prompt-review | task-prompt | `Please review the pull request in shop-models that changes how late arriving orders are handled in the daily orders model and tell me what traps I should look for` | 2 | rank 1 |
+| prompt-retry | task-prompt | `Continue the work on retrying failed payments, I think the provider sandbox was the last thing that worked, what is left before the order gets cancelled` | 1 | rank 1 |
+| prompt-access | task-prompt | `I need to fix a wrong number in the billing schema, which role do I need for that and can an analyst write there` | 1 | rank 1 |
+| prompt-region | task-prompt | `What is blocking region three of the checkout roll-out and what did we decide about keeping the old provider as a fallback` | 2 | rank 1 |
+| prompt-channel | task-prompt | `Open a pull request for the shop-models repo and announce it, which channel do these go to and which labels does it need` | 1 | rank 1 |
+| prompt-dedupe | task-prompt | `The customers_snapshot job shows duplicate keys again after yesterday's outage, is there a runbook for that` | 1 | rank 1 |
 
 multi-term: 9 of 9 at rank 1, 9 of 9 found
 paraphrase: 0 of 1 at rank 1, 0 of 1 found
 variant: 1 of 3 at rank 1, 3 of 3 found
 single-term: 4 of 4 at rank 1, 4 of 4 found
 ranking: 1 of 1 at rank 1, 1 of 1 found
-all: 15 of 18 at rank 1, 17 of 18 found
+task-prompt: 7 of 7 at rank 1, 7 of 7 found
+all: 22 of 25 at rank 1, 24 of 25 found

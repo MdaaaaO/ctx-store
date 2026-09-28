@@ -121,6 +121,9 @@ def main():
         ("`find <word in one doc>`", ("find", "quokka")),
         ("`find <common word>`", ("find", "rollout")),
         ("`find --tag`", ("find", "--tag", "t7")),
+        ("`find <three words>`", ("find", "rollout schema quokka")),
+        ("`find <task prompt, 25 words>`", ("find", "please look at the rollout of the new schema for the ledger and tell me "
+                                             "which session last touched the quokka migrate hook and why the deploy failed")),
         ("`validate`", ("validate",)),
         ("`validate --changed`", ("validate", "--changed")),
     )

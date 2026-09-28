@@ -417,7 +417,8 @@ One section of a doc, or its body; `--tail` keeps the last `n` entries
 (default 8192); `--out auto` as for `find`.
 
 Several docs, separated by commas, are answered in one call, each under a
-line `== <doc> ==`. The budget is the call's and is shared evenly, so one long doc cannot
+line `== <doc> ==`. A key that holds a comma itself and names a doc that
+exists is read as that one doc; it is looked up first. The budget is the call's and is shared evenly, so one long doc cannot
 crowd the others out. A doc that lacks the section says so in its part. A doc
 that does not exist, or that has the heading twice, fails the call.
 

@@ -41,7 +41,7 @@ def validate(store, params):
     found, checked, adopted, warnings = [], 0, [], []
     guard = store.marker.get("maintain", {}).get("size_guard", SIZE_GUARD)
     for key in store.keys():
-        data = store.read(key)
+        data = store.read(key, listed=True)
         if len(data) > guard:
             warnings.append({"code": "SIZE_GUARD", "doc": key, "bytes": len(data)})
         if changed and digest(data) in audited.get(key, ()) and key not in broken:

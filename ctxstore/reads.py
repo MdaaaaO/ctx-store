@@ -4,6 +4,7 @@ import re
 
 from . import frontmatter, fs, sections
 from .contract import CtxError
+from .store import HEAD, Doc, head_fields
 from .verbs import FULL, _budget, _fit
 
 SUMMARY = 80
@@ -90,41 +91,94 @@ def _docs(stores):
                 continue  # an earlier store of the list holds this key
             seen.add(key)
             try:
-                doc = store.load(key)
+                doc = store.load(key, listed=True)
             except CtxError:
                 continue  # a doc that does not parse is `validate`'s to report
             yield prefix, store, doc
 
 
+def _head(data):
+    """The bytes of a doc's frontmatter."""
+    end = data.find(b"\n---", 3)
+    return data if end < 0 else data[:end]
+
+
 def find(stores, params, config):
+    """Two passes: every doc is matched on its bytes, and only the hits that
+    are shown are parsed into rows."""
     needle = params.get("query", "").lower()
     if not needle and "type" not in params and "tag" not in params:
         raise CtxError("USAGE", "query")
-    hits = []
-    for prefix, store, doc in _docs(stores):
-        if "type" in params and store.type_of(doc) != params["type"]:
+    plain = needle.isascii()
+    wanted, hits, seen = needle.encode("utf-8"), [], set()
+    for number, store in enumerate(stores, 1):
+        prefix = f"{number}:" if len(stores) > 1 else ""
+        for key in store.keys():
+            if key in seen:
+                continue  # an earlier store of the list holds this key
+            seen.add(key)
+            data = store.read(key, listed=True)
+            in_key = needle in key.lower()
+            if plain:  # bytes.lower() folds ASCII only, which is all an ASCII query needs
+                in_doc, in_head = wanted in data.lower(), wanted in _head(data).lower()
+            else:
+                try:
+                    text = data.decode("utf-8").lower()
+                except UnicodeDecodeError:
+                    continue
+                in_doc, in_head = needle in text, needle in _head(data).decode("utf-8", errors="replace").lower()
+            if not (in_key or in_doc):
+                continue
+            if "type" in params or "tag" in params:
+                fields = head_fields(data[:HEAD])
+                if fields is None:  # frontmatter longer than the head, or broken
+                    try:
+                        fields = Doc(key, data).fields
+                    except CtxError:
+                        continue
+                if "type" in params and store.type_by(key, fields) != params["type"]:
+                    continue
+                tags = fields.get("tags")
+                if "tag" in params and params["tag"] not in (tags if isinstance(tags, list) else [tags]):
+                    continue
+            hits.append((0 if in_key or in_head else 1, key, prefix, data))
+    hits.sort(key=lambda hit: hit[:2])
+    limit = None if params.get("out") == "auto" else _budget(params, 4096)
+    rows, used = [], 0
+    for _, key, prefix, data in hits:
+        if limit is not None and used > limit and head_fields(data[:HEAD]) is not None:
+            rows.append("")  # past the budget: counted, never shown; its head parses, the body is left alone
             continue
-        tags = doc.fields.get("tags")
-        if "tag" in params and params["tag"] not in (tags if isinstance(tags, list) else [tags]):
-            continue
-        head = " ".join([doc.key, *(frontmatter.render(v) for v in doc.fields.values())]).lower()
-        if needle in head:
-            rank = 0
-        elif needle in doc.body.lower():
-            rank = 1
-        else:
-            continue
-        hits.append((rank, doc.key, _row(prefix, doc, needle)))
-    hits.sort()
-    lines = [f"{len(hits)} hits"] + [row for _, _, row in hits]
-    data, text = _deliver(params, config, "find.txt", lines, "hits", default=4096)
-    return {"hits": len(hits), **data}, text
+        try:
+            rows.append(_row(prefix, Doc(key, data), needle))
+        except CtxError:
+            continue  # a doc that does not parse is `validate`'s to report
+        used += len(rows[-1].encode("utf-8")) + 1
+    data, text = _deliver(params, config, "find.txt", [f"{len(rows)} hits"] + rows, "hits", default=4096)
+    return {"hits": len(rows), **data}, text
+
+
+def _naming(stores, key):
+    """(prefix, store, doc) of the docs whose bytes hold the key at all."""
+    seen, wanted = set(), key.encode("utf-8")
+    for number, store in enumerate(stores, 1):
+        prefix = f"{number}:" if len(stores) > 1 else ""
+        for name in store.keys():
+            if name in seen:
+                continue
+            seen.add(name)
+            data = store.read(name, listed=True)
+            if wanted in data:
+                try:
+                    yield prefix, store, Doc(name, data)
+                except CtxError:
+                    continue
 
 
 def resolve(stores, params, config):
     key = params["key"]
     found = []
-    for prefix, store, doc in _docs(stores):
+    for prefix, store, doc in _naming(stores, key):
         settings = store.marker["resolve"]
         shape = settings.get("key_regex")
         if not shape:

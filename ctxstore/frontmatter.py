@@ -12,14 +12,21 @@ KEY = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?: (.*)|)$")
 
 
 def split(text):
-    """(frontmatter lines, body) — the lines between the first two `---`."""
-    lines = text.split("\n")
-    if not lines or lines[0].rstrip() != FENCE:
+    """(frontmatter lines, body) — the lines between the first two `---`.
+    Only the frontmatter is cut into lines; the body is one slice."""
+    end = text.find("\n")
+    if end < 0 or text[:end].rstrip() != FENCE:
         raise CtxError("SCHEMA_VIOLATION", "frontmatter")
-    for index in range(1, len(lines)):
-        if lines[index].rstrip() == FENCE:
-            return lines[1:index], "\n".join(lines[index + 1:])
-    raise CtxError("SCHEMA_VIOLATION", "frontmatter")
+    lines = []
+    while True:
+        start = end + 1
+        end = text.find("\n", start)
+        line = text[start:] if end < 0 else text[start:end]
+        if line.rstrip() == FENCE:
+            return lines, "" if end < 0 else text[end + 1:]
+        if end < 0:
+            raise CtxError("SCHEMA_VIOLATION", "frontmatter")
+        lines.append(line)
 
 
 def _scalar(raw):

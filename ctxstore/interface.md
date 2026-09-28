@@ -128,7 +128,8 @@ Every write leaves one audit row: `seq` (the store's write counter) `ts`
 ## Backends
 
 A backend provides: the settings, the type schemas and templates, the doc
-keys, read, write (whole or not at all), remove, a lock with a timeout, the
+keys, read, read of a doc's head (optional: for scans that need the
+frontmatter only), write (whole or not at all), remove, a lock with a timeout, the
 audit rows, whether the store is read-only, and what `doctor` reports. The
 core does the rest: validation, the secret guard, owners, sections, budgets,
 links. `ctxstore/backend.py` is the interface; its `memory` backend is the

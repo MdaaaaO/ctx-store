@@ -28,6 +28,22 @@ class Doc:
         self.fields = frontmatter.parse(lines)
 
 
+HEAD = 4096
+
+
+def head_fields(data):
+    """The frontmatter fields of a doc from its first bytes, or None when the
+    frontmatter does not end inside them (or does not parse)."""
+    end = data.find(b"\n---", 3)
+    if not data.startswith(b"---") or end < 0:
+        return None
+    try:
+        lines, _ = frontmatter.split(data[: end + 4].decode("utf-8") + "\n")
+        return frontmatter.parse(lines)
+    except (CtxError, UnicodeDecodeError):
+        return None
+
+
 class Store:
     def __init__(self, backend, config, named):
         self.backend = backend
@@ -58,8 +74,9 @@ class Store:
             raise CtxError("NO_SUCH_DOC", key)
         return key
 
-    def read(self, key):
-        return self.backend.read(self.key(key))
+    def read(self, key, listed=False):
+        """`listed`: the key comes from `keys()`, so it is canonical already."""
+        return self.backend.read(key if listed else self.key(key))
 
     def has(self, key):
         try:
@@ -76,16 +93,19 @@ class Store:
             raise CtxError("GENERATED", key)
         return key
 
-    def load(self, key):
-        key = self.key(key)
+    def load(self, key, listed=False):
+        key = key if listed else self.key(key)
         return Doc(key, self.backend.read(key))
 
     def type_of(self, doc):
-        name = doc.fields.get("type")
+        return self.type_by(doc.key, doc.fields)
+
+    def type_by(self, key, fields):
+        name = fields.get("type")
         if isinstance(name, str) and name:
             return name
         for name, schema in self.types.items():
-            if self._matches(doc.key, schema.get("paths", [])):
+            if self._matches(key, schema.get("paths", [])):
                 return name
         return None
 
@@ -108,9 +128,16 @@ class Store:
 
     def of_type(self, name):
         found = []
+        paths = self.types.get(name, {}).get("paths", [])
         for key in self.keys():
+            fields = head_fields(self.backend.read_head(key, HEAD))
+            if fields is not None:
+                kind = fields.get("type")
+                named = isinstance(kind, str) and kind
+                if (named and kind != name) or (not named and not self._matches(key, paths)):
+                    continue  # the frontmatter says it is another type's
             try:
-                doc = self.load(key)
+                doc = self.load(key, listed=True)
             except CtxError:
                 continue
             if self.type_of(doc) == name:

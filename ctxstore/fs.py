@@ -191,10 +191,10 @@ def list_docs(root):
     return sorted(keys)
 
 
-def read_bytes(path, key):
+def read_bytes(path, key, size=-1):
     try:
         with open(path, "rb") as handle:
-            return handle.read()
+            return handle.read(size)
     except (FileNotFoundError, IsADirectoryError, NotADirectoryError):
         raise CtxError("NO_SUCH_DOC", key) from None
 

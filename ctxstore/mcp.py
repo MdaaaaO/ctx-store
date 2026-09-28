@@ -13,6 +13,19 @@ KINDS = {"text": "string", "int": "integer", "flag": "boolean"}
 HIDDEN = ("from", "out")  # files of the server's machine are not the client's
 
 
+def describe(text, positional, options):
+    """A verb's help as a tool's description. The help is written for the
+    command line: what differs over MCP is said after it, so a model does
+    not look for a parameter that the help names and the schema lacks."""
+    notes = []
+    if positional:
+        notes.append("Parameters named in angle brackets above are, in order: " + ", ".join(positional) + ".")
+    hidden = [f"--{name}" for name in HIDDEN if name in options]
+    if hidden:
+        notes.append("Not offered over MCP: " + ", ".join(hidden) + " (files of the server's machine).")
+    return text + ("\n\nOver MCP. " + " ".join(notes) if notes else "")
+
+
 def tools():
     from . import cli
     sections = spec.verbs()
@@ -27,7 +40,7 @@ def tools():
                 properties[name] = {"type": KINDS[kind]}
         listed.append({
             "name": f"ctx_{verb}",
-            "description": sections[verb],
+            "description": describe(sections[verb], positional, options),
             "inputSchema": {
                 "type": "object",
                 "properties": properties,

@@ -234,7 +234,7 @@ validated, locked and audited whichever way it arrives.
 |---|---|
 | `ctx <verb>` | hooks, people, cron |
 | `ctx memory` | Anthropic's memory tool: the tool call's input as one JSON object on stdin (`{"command": "view", "path": "/memories/epics/sample.md"}`), the tool result on stdout. `/memories` is the store. Commands `view` `create` `str_replace` `insert` `delete` `rename` are the verbs of the same name |
-| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb, `ctx_<verb>`, its input the verb's parameters. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's |
+| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb, `ctx_<verb>`, its input the verb's parameters. A tool's description is the verb's help, followed by what differs over MCP: the names of the parameters the help shows in angle brackets, in order, and the options that are not offered. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's |
 
 Claude Desktop, `claude_desktop_config.json`:
 
@@ -290,7 +290,7 @@ Exit codes as for `log`.
 
 ### rename
 
-ctx rename <doc> <new>
+ctx rename <doc> <to>
 
 Rename a doc and rewrite the links to it: relative markdown links
 (`[x](../a/b.md#part)`) and wikilinks of its key or name (`[[b]]`). The
@@ -342,7 +342,7 @@ Exit codes as for `log`; 3 `DOC_EXISTS`.
 
 ### move
 
-ctx move <doc> <new>
+ctx move <doc> <to>
 
 `rename` under the name of the structured write; the audit rows say `move`.
 

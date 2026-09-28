@@ -175,7 +175,7 @@ class Store:
     def apply(self, verb, key, change, now=None, actor=None, check=True):
         """One doc's write, under a lock the caller holds. `change` returning
         None removes the doc."""
-        path, key = fs.doc_path(self.root, key)
+        path, key = self.path(key)
         if self.generated(key):
             raise CtxError("GENERATED", key)
         actor = actor or self.config.actor

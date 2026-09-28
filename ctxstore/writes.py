@@ -12,7 +12,7 @@ WIKI = re.compile(r"\[\[([^\]|#\n]+)([|#][^\]\n]*)?\]\]")
 
 
 def _key(store, key):
-    return fs.doc_path(store.root, key)[1]
+    return store.path(key)[1]
 
 
 # --- view -------------------------------------------------------------------

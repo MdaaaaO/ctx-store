@@ -88,11 +88,11 @@ def _docs(stores):
         for key in store.keys():
             if key in seen:
                 continue  # an earlier store of the list holds this key
+            seen.add(key)
             try:
                 doc = store.load(key)
             except CtxError:
-                continue
-            seen.add(key)
+                continue  # a doc that does not parse is `validate`'s to report
             yield prefix, store, doc
 
 

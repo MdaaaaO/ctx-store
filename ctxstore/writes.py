@@ -3,8 +3,9 @@ remove docs. Every one goes through the store's write path."""
 import posixpath
 import re
 
-from . import fs, secrets
+from . import fs
 from .contract import CtxError
+from .store import decode
 from .verbs import _budget, _clock, _fit, _one_line
 
 LINK = re.compile(r"(\[[^\]\n]*\]\()([^)\s]+)(\))")
@@ -26,7 +27,7 @@ def view(store, params):
         if not keys and folder:
             raise CtxError("NO_SUCH_DOC", target)
         lines = [f"{len(keys)} docs"] + [f"{key}.md ({len(store.read(key)[2])} bytes)" for key in keys]
-        kept, truncated = _fit(lines, _budget(params), "docs")
+        kept, truncated = _fit(lines, _budget(params, 8192), "docs")
         return {"docs": keys, "truncated": truncated}, "\n".join(kept)
     doc = store.load(target)
     lines = doc.text.split("\n")
@@ -133,10 +134,18 @@ def _target(source, link):
     return posixpath.normpath(posixpath.join(posixpath.dirname(source), path))[:-3]
 
 
+def _names(store, key):
+    """What a wikilink may call the doc: its key, and its name when no other
+    doc shares it."""
+    name = key.rsplit("/", 1)[-1]
+    shared = any(other != key and other.rsplit("/", 1)[-1] == name for other in store.keys())
+    return {key} if shared else {key, name}
+
+
 def _links(store, key):
     """Keys of the docs that link to `key`, by a relative markdown link or a
     wikilink of its key or its name."""
-    names = {key, key.rsplit("/", 1)[-1]}
+    names = _names(store, key)
     found = []
     for other in store.keys():
         if other == key:
@@ -161,11 +170,11 @@ def delete(store, params):
     return {"doc": row["doc"], "links": links}, text
 
 
-def _relink(text, source, old, fresh, moved_to=None):
+def _relink(text, source, old, fresh, names, moved_to=None):
     """`text` of the doc `source` with its links to `old` pointing at `fresh`.
-    `moved_to` is the new key of the doc itself, when it is the one moving."""
+    `names` is what a wikilink may call `old`; `moved_to` is the new key of
+    the doc itself, when it is the one moving."""
     home = moved_to or source
-    names = {old} if "/" in old and old.rsplit("/", 1)[-1] in _ambiguous else {old, old.rsplit("/", 1)[-1]}
 
     def markdown(match):
         target = _target(source, match.group(2))
@@ -187,8 +196,6 @@ def _relink(text, source, old, fresh, moved_to=None):
     return WIKI.sub(wiki, LINK.sub(markdown, text))
 
 
-_ambiguous = frozenset()
-
 
 def rename(store, params, verb="rename"):
     old, fresh = _key(store, params["doc"]), _key(store, params["to"])
@@ -202,13 +209,12 @@ def rename(store, params, verb="rename"):
             raise CtxError("NO_SUCH_DOC", old)
         if store.has(fresh):
             raise CtxError("DOC_EXISTS", fresh)
-        linking = _links(store, old)
-        moved = _relink(store.read(old)[2].decode("utf-8"), old, old, fresh, moved_to=fresh)
-        secrets.scan("")
+        linking, names = _links(store, old), _names(store, old)
+        moved = _relink(decode(store.read(old)[2]), old, old, fresh, names, moved_to=fresh)
         store.apply(verb, fresh, lambda current: moved, now)
         store.apply(verb, old, lambda current: None, now)
         for other in linking:
-            store.apply(verb, other, lambda current, other=other: _relink(current, other, old, fresh), now, check=False)
+            store.apply(verb, other, lambda current, other=other: _relink(current, other, old, fresh, names), now, check=False)
     text = f"{'moved' if verb == 'move' else 'renamed'}: {old} → {fresh}"
     if linking:
         text += f" ({len(linking)} docs relinked)"

@@ -127,6 +127,18 @@ class Find(StoreCase):
         self.assertRegex(lines[1], r"^reference/all · All · - · .* · § Notes · \d+ of 15 terms$")
         self.assertRegex(lines[2], r"^reference/most · Most · - · .* · § Runbook · \d+ of 15 terms$")
 
+    def test_one_rare_term_can_be_most_of_a_task(self):
+        for number in range(30):
+            self.put(f"reference/c{number:02}", f"---\ntitle: C{number}\ntype: reference\n---\n\ncheck the status of the job\n")
+        self.put("reference/rare", "---\ntitle: R\ntype: reference\n---\n\nAbout load_quokka_v2 only.\n")
+        out = self.run_ctx("find", "check status job load_quokka_v2")[1].split("\n")
+        self.assertEqual(out[0], "1 hits")
+        self.assertEqual(out[1], "reference/rare · R · - · About load_quokka_v2 only. · 1 of 4 terms")
+        # a word that no doc holds weighs nothing: the docs that hold the rest are the hits
+        out = self.run_ctx("find", "check status job zebra_v9")[1].split("\n")
+        self.assertEqual(out[0], "30 hits")
+        self.assertTrue(out[1].endswith(" · 3 of 4 terms"))
+
     def test_a_short_query_needs_every_term(self):
         self.put("reference/most", "---\ntitle: Most\ntype: reference\n---\n\nThe quokka dag failed.\n")
         self.assertEqual(self.run_ctx("find", "quokka dag timeout")[1], "0 hits\n")

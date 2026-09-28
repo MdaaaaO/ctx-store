@@ -125,8 +125,8 @@ def find(stores, params, config):
             total += 1
             data = store.read(key, listed=True)
             mask = search.held(found, wanted, key, data, holders)
-            if not all(mask) and not (long and sum(mask) >= 2):
-                continue
+            if not all(mask) and not (long and any(mask)):
+                continue  # whether it holds enough of a long query is known once every doc is seen
             low = key.lower()
             in_key = [search.holds(term, low, search.squeeze(low)) for term in found]
             if filtered:

@@ -328,6 +328,29 @@ class OAuth(ServeCase):
         self.clock.now += 601
         self.assertEqual(self.authorize(client)[0], 303)
 
+    def test_the_form_is_posted_as_a_browser_posts_it(self):
+        client = self.register()
+        query = {"client_id": client, "redirect_uri": CALLBACK, "response_type": "code", "state": "s",
+                 "code_challenge": challenge(), "code_challenge_method": "S256"}
+
+        def post(origin):
+            page = self.call("GET", "/authorize?" + urllib.parse.urlencode(query))[2]
+            form = page.split('name="form" value="')[1].split('"')[0]
+            headers = {} if origin is None else {"Origin": origin}
+            return self.call("POST", "/authorize", form={"form": form, "passphrase": SECRET}, headers=headers)[0]
+        self.assertEqual(post("https://ctx.example.test"), 303)  # the page's own origin
+        self.assertEqual(post("null"), 303)                       # a page that sends no referrer
+        self.assertEqual(post(None), 303)
+        self.assertEqual(post("https://evil.example"), 403)
+        self.assertEqual(post("https://claude.ai"), 303)
+        # `null` opens nothing else
+        ping = {"jsonrpc": "2.0", "id": 1, "method": "ping"}
+        self.assertEqual(self.rpc(ping, Origin="null")[0], 403)
+        self.assertEqual(self.call("POST", "/token", form={"grant_type": "x"}, headers={"Origin": "null"})[0], 403)
+        # and the form's token is what ties a post to a page: without one, nothing is granted
+        self.assertEqual(self.call("POST", "/authorize", form={"form": "made-up", "passphrase": SECRET},
+                                   headers={"Origin": "null"})[0], 400)
+
     def test_the_consent_page(self):
         client = self.register()
         query = {"client_id": client, "redirect_uri": CALLBACK, "response_type": "code", "state": "s",

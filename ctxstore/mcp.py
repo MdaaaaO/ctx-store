@@ -78,7 +78,8 @@ def respond(message, environ, store):
     if "id" not in message:
         return None
     if method == "initialize":
-        asked = (message.get("params") or {}).get("protocolVersion")
+        params = message.get("params")
+        asked = params.get("protocolVersion") if isinstance(params, dict) else None
         return _result(ident, {
             "protocolVersion": asked if asked in PROTOCOLS else PROTOCOLS[0],
             "capabilities": {"tools": {}},

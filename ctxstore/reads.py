@@ -70,6 +70,8 @@ def get(stores, params, config):
         try:
             return _slice(doc, params)
         except CtxError as failure:
+            if failure.code != "NO_SUCH_SECTION":
+                raise  # a heading that is there twice is the doc's fault, not an absence
             return [failure.line()]
     if params.get("out") == "auto":
         lines = []

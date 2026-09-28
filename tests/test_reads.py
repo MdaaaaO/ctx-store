@@ -50,6 +50,11 @@ class Get(StoreCase):
         self.fails(self.run_ctx("get", "--docs", f"{EPIC},epics/none"), 2, "NO_SUCH_DOC epics/none: no such doc")
         self.fails(self.run_ctx("get", "--docs", f"{EPIC},../x"), 3, "PATH_ESCAPE ../x: path leaves the store")
         self.fails(self.run_ctx("get", "--docs", f"{EPIC},{EPIC}"), 1, "USAGE --docs: bad command line")
+        self.put("reference/twice", "---\ntitle: T\ntype: reference\n---\n\n## Goal\na\n\n## Goal\nb\n")
+        self.fails(self.run_ctx("get", "--docs", f"{EPIC},reference/twice", "--section", "Goal"), 3,
+                   "AMBIGUOUS_SELECTOR Goal: selector matches more than one target")
+        self.fails(self.run_ctx("get", "reference/twice", "--section", "Goal"), 3,
+                   "AMBIGUOUS_SELECTOR Goal: selector matches more than one target")
         self.fails(self.run_ctx("get", "--docs", " , "), 1, "USAGE --docs: bad command line")
         self.fails(self.run_ctx("get", EPIC, "--docs", "ledger"), 1, "USAGE doc: bad command line")
         self.fails(self.run_ctx("get"), 1, "USAGE doc: bad command line")
@@ -515,6 +520,9 @@ class Mcp(StoreCase):
             "properties": {"doc": {"type": "string"}, "text": {"type": "string"}, "section": {"type": "string"},
                            "date": {"type": "string"}}})
         self.assertTrue(tools["ctx_log"]["description"].startswith("ctx log <doc> <text>"))
+        # one of two parameters is needed: said in the description, which a schema without `anyOf` cannot
+        self.assertEqual(tools["ctx_get"]["inputSchema"]["required"], [])
+        self.assertTrue(tools["ctx_get"]["description"].startswith("ctx get <doc> | --docs <doc>,<doc>…"))
         self.assertEqual(self.talk(self.request(1, "initialize", protocolVersion="1999-01-01"))[0]["result"]["protocolVersion"],
                          "2025-06-18")
 

@@ -483,6 +483,7 @@ class Brief(StoreCase):
         self.assertNotIn("link", self.run_ctx("brief", "ledger")[1])
         self.assertNotIn("links to", self.run_ctx("brief", "sessions/beta-docs", "--links")[1])
         self.fails(self.run_ctx("brief", "--registry", "--links"), 1, "USAGE --links: bad command line")
+        self.fails(self.run_ctx("brief", "--session", "nobody", "--links"), 1, "USAGE --links: bad command line")
 
     def test_registry_with_long_frontmatter(self):
         long = self.text("sessions/alpha-rollout").replace("working_on: region three", "working_on: " + "x" * 6000)

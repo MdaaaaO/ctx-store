@@ -418,8 +418,8 @@ One section of a doc, or its body; `--tail` keeps the last `n` entries
 
 `--docs` answers for several docs in one call, each under a line `== <doc>
 ==`. The budget is the call's and is shared evenly, so one long doc cannot
-crowd the others out. A doc that lacks the section says so in its part; a doc
-that does not exist fails the call.
+crowd the others out. A doc that lacks the section says so in its part. A doc
+that does not exist, or that has the heading twice, fails the call.
 
 Exit 0; 2 `NO_SUCH_DOC`, `NO_SUCH_SECTION`; 3 `AMBIGUOUS_SELECTOR`.
 

@@ -227,6 +227,8 @@ def brief(store, params):
     chosen = [name for name in ("registry", "session", "doc") if params.get(name)]
     if len(chosen) != 1:
         raise CtxError("USAGE", "brief")
+    if params.get("links") and chosen[0] != "doc":
+        raise CtxError("USAGE", "--links")
     if chosen[0] == "registry":
         lines = _registry_lines(store)
     elif chosen[0] == "session":
@@ -238,8 +240,6 @@ def brief(store, params):
             for label, keys in (("links to", links.outbound(store, doc)), ("linked from", links.inbound(store, doc.key))):
                 if keys:
                     lines.append(f"{label}: {', '.join(keys)}")
-    if params.get("links") and chosen[0] != "doc":
-        raise CtxError("USAGE", "--links")
     kept, truncated = _fit(lines, _budget(params))
     text = "\n".join(kept)
     return {"text": text, "bytes": len(text.encode("utf-8")) + 1, "truncated": truncated}, text

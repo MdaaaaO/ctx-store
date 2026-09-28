@@ -54,5 +54,34 @@ Every call a harness hook needs is one line. A write names its store; a read may
 Every built verb is a tool (`ctx_brief`, `ctx_find`, `ctx_log`, …). `ctx memory` takes the input of
 Anthropic's memory tool on stdin.
 
-**Status:** P3: every verb except `row` is built. Design and phasing:
+## Speed
+
+Milliseconds per call as a caller sees it: a fresh process each time, interpreter start included
+(about 40 ms of every number). Generated Markdown stores of 3.1 MB and 39.2 MB, 20 runs per call,
+Python 3.14 on Linux under WSL2. The two stores were measured in separate runs on a machine that was
+not idle: compare a row with the first row of its own column. `python3 bench/bench.py` reproduces it.
+
+| Call | 225 docs p50 | p95 | 3 000 docs p50 | p95 |
+|---|---:|---:|---:|---:|
+| start of the interpreter (`--version`) | 51 | 68 | 42 | 47 |
+| `brief <doc>` | 54 | 92 | 47 | 50 |
+| `get <doc> --section --tail 5` | 57 | 76 | 44 | 50 |
+| `view <doc>` | 50 | 56 | 43 | 53 |
+| `brief --registry` | 62 | 75 | 162 | 175 |
+| `brief --session <id>` | 63 | 72 | 154 | 164 |
+| `resolve <key>` | 57 | 71 | 126 | 157 |
+| `find <word in one doc>` | 53 | 57 | 149 | 164 |
+| `find <common word>` | 57 | 65 | 153 | 168 |
+| `find --tag` | 60 | 79 | 169 | 188 |
+| `validate` | 76 | 90 | 370 | 411 |
+| `validate --changed` | 62 | 72 | 239 | 285 |
+
+**No search cache.** The rule was: a cache enters only above 3 000 docs, with `find` over 200 ms at
+p95, or when a lookup needs ranked search a scan cannot give. At 3 000 docs every `find` stays under
+200 ms and no caller needs ranking, so the store has no index to build, validate or lose. The
+question returns when a store passes 3 000 docs.
+
+`validate --changed`, the call behind the after-write hook, stays under its 300 ms budget at 3 000 docs.
+
+**Status:** P4: every verb except `row` is built; measured; no cache. Design and phasing:
 [#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: MIT.

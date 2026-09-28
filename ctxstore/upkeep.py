@@ -47,7 +47,7 @@ def _pending(store):
     found = []
     for key in store.keys():
         try:
-            doc = store.load(key)
+            doc = store.load(key, listed=True)
         except CtxError:
             continue  # a doc that does not parse is `validate`'s to report
         name = store.type_of(doc)
@@ -106,7 +106,7 @@ def _archive_logs(store, rules, config, now, date, report):
     guard, keep = rules.get("size_guard", SIZE_GUARD), rules.get("keep_log", KEEP_LOG)
     pattern = rules.get("archive", "archive/{slug}-log")
     for key in store.keys():
-        if len(store.read(key)) <= guard:
+        if len(store.read(key, listed=True)) <= guard:
             continue
         doc = store.load(key)
         log = store.types.get(store.type_of(doc) or "", {}).get("log", {})
@@ -180,7 +180,7 @@ def _catalog(store, rules, report):
             "| Doc | Title | Type | Status | Updated |", "|---|---|---|---|---|"]
     for other in store.keys():
         try:
-            doc = store.load(other)
+            doc = store.load(other, listed=True)
         except CtxError:
             continue
         cells = [f"[`{other}`]({other}.md)", doc.fields.get("title") or doc.fields.get("session") or "-",

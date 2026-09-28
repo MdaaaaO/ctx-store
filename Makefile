@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: test golden ci
+.PHONY: test golden ci bench
 
 test:
 	$(PYTHON) -m unittest discover -s tests -t . -v
@@ -11,3 +11,7 @@ golden:
 
 ci: test
 	$(PYTHON) -m compileall -q ctxstore ctx
+
+# Latency of the read verbs on a generated 3 000-doc store; prints the README's table.
+bench:
+	$(PYTHON) bench/bench.py

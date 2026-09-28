@@ -63,6 +63,9 @@ class MarkdownBackend(Backend):
     def read(self, key):
         return fs.read_bytes(self._path(key), key)
 
+    def read_head(self, key, size):
+        return fs.read_bytes(self._path(key), key, size)
+
     def write(self, key, data):
         return fs.write_atomic(self._path(key), data)
 

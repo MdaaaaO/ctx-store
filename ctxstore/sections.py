@@ -13,6 +13,8 @@ def headings(body):
     """(line index, level, text) for every heading outside fenced code."""
     found, fence = [], None
     for index, line in enumerate(body.split("\n")):
+        if line[:1] not in "#`~":
+            continue
         mark = FENCE.match(line)
         if mark:
             if fence is None:

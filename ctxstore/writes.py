@@ -152,7 +152,7 @@ def _links(store, key):
     for other in store.keys():
         if other == key:
             continue
-        text = store.read(other).decode("utf-8", errors="replace")
+        text = store.read(other, listed=True).decode("utf-8", errors="replace")
         hit = any(_target(other, m.group(2)) == key for m in LINK.finditer(text))
         hit = hit or any(m.group(1).strip() in names for m in WIKI.finditer(text))
         if hit:

@@ -66,6 +66,11 @@ class Backend:
         """The doc's bytes, or NO_SUCH_DOC."""
         raise NotImplementedError
 
+    def read_head(self, key, size):
+        """The first `size` bytes of the doc, or more: enough for a scan that
+        needs the frontmatter only. A backend may return the whole doc."""
+        return self.read(key)[:size]
+
     def write(self, key, data):
         """Store the doc whole or not at all; returns what a read now gives."""
         raise NotImplementedError

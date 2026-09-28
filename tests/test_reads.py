@@ -74,6 +74,35 @@ class Find(StoreCase):
         shown = data["text"].split("\n")
         self.assertEqual(shown[-1], f"… {61 - (len(shown) - 1)} more hits, raise --budget")
 
+    def test_case_and_non_ascii(self):
+        self.put("reference/umlaut", "---\ntitle: Über Größe\ntype: reference\n---\n\nDie STRASSE ist lang.\n")
+        for query in ("über", "ÜBER", "größe", "strasse", "Strasse"):
+            self.assertEqual(self.run_ctx("find", query)[1].split("\n")[0], "1 hits", query)
+        self.assertTrue(self.run_ctx("find", "GRÖSSE")[1].startswith("0 hits"))
+
+    def test_a_doc_that_does_not_parse_is_not_a_hit(self):
+        self.put("reference/broken", "no frontmatter but the word region\n")
+        with open(self.path("reference/binary"), "wb") as handle:
+            handle.write(b"---\ntitle: B\ntype: reference\n---\n\nregion \xff\xfe r\xc3\xa9gion\n")
+        self.assertEqual(self.run_ctx("find", "region")[1].split("\n")[0], "2 hits")
+        self.assertEqual(self.run_ctx("find", "région")[1].split("\n")[0], "0 hits")
+
+    def test_type_and_tag_with_frontmatter_longer_than_the_head(self):
+        self.put("reference/long", "---\ntitle: " + "x" * 6000 + "\ntype: reference\ntags: [locks, long]\n---\n\nbody\n")
+        self.assertEqual(self.run_ctx("find", "--tag", "long")[1].split("\n")[0], "1 hits")
+        self.assertEqual(self.run_ctx("find", "--type", "reference")[1].split("\n")[0], "2 hits")
+
+    def test_hits_past_the_budget_are_counted(self):
+        for number in range(80):
+            self.put(f"reference/n{number:02}", f"---\ntitle: Note {number}\ntype: reference\n---\n\nneedle {number}\n")
+        self.put("reference/n99", "needle, and no frontmatter\n")
+        data = json.loads(self.run_ctx("find", "needle", "--budget", "500", "--json")[1])["data"]
+        self.assertEqual((data["hits"], data["truncated"]), (80, True))
+        scratch = os.path.join(self.work.name, "scratch")
+        path = self.run_ctx("find", "needle", "--out", "auto", CTX_SCRATCH=scratch)[1].strip()
+        with open(path) as handle:
+            self.assertEqual(len(handle.read().splitlines()), 81)
+
     def test_usage(self):
         self.fails(self.run_ctx("find"), 1, "USAGE query: bad command line")
 
@@ -85,6 +114,10 @@ class Resolve(StoreCase):
         os.unlink(self.path("sessions/alpha-rollout"))
         self.assertEqual(self.run_ctx("resolve", "EX-1", "--json")[1:], self.run_ctx("resolve", "EX-1", "--json")[1:])
         self.assertEqual(json.loads(self.run_ctx("resolve", "EX-1", "--json")[1])["data"]["doc"], EPIC)
+
+    def test_a_doc_that_does_not_parse_does_not_stop_resolve(self):
+        self.put("reference/broken", "EX-2 but no frontmatter\n")
+        self.assertEqual(self.run_ctx("resolve", "EX-2")[0], 0)
 
     def test_failures(self):
         self.fails(self.run_ctx("resolve", "EX-99"), 2, "NO_SUCH_DOC EX-99: no such doc")

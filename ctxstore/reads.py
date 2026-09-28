@@ -146,8 +146,8 @@ def find(stores, params, config):
     limit = None if params.get("out") == "auto" else _budget(params, 4096)
     rows, used = [], 0
     for _, key, prefix, data in hits:
-        if limit is not None and used > limit:
-            rows.append("")  # past the budget: counted, never shown, so never parsed
+        if limit is not None and used > limit and head_fields(data[:HEAD]) is not None:
+            rows.append("")  # past the budget: counted, never shown; its head parses, the body is left alone
             continue
         try:
             rows.append(_row(prefix, Doc(key, data), needle))

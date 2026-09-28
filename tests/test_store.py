@@ -471,6 +471,18 @@ class Brief(StoreCase):
         self.assertGreater(len(full.encode()), 8192)
         self.assertLessEqual(len(full.encode()), 20000)
 
+    def test_registry_with_long_frontmatter(self):
+        long = self.text("sessions/alpha-rollout").replace("working_on: region three", "working_on: " + "x" * 6000)
+        self.put("sessions/alpha-rollout", long)
+        self.put("sessions/typed-elsewhere", self.text("sessions/beta-docs").replace(
+            "session: beta-docs", "session: other\ntype: reference").replace("sid-beta", "sid-other"))
+        self.put("epics/a-session-by-type", "---\nsession: by-type\ntype: session\nstatus: active\n---\n\n# S\n")
+        self.put("sessions/broken", "no frontmatter\n")
+        lines = self.run_ctx("brief", "--registry", "--budget", "8000", "--full")[1].split("\n")
+        self.assertEqual(lines[0], "sessions: 3 not ended")
+        self.assertEqual([line.split(" · ")[0] for line in lines[1:4]], ["- alpha-rollout", "- beta-docs", "- by-type"])
+        self.assertEqual(self.run_ctx("touch", "--session", "by-type")[0], 0)
+
     def test_usage(self):
         self.fails(self.run_ctx("brief"), 1, "USAGE brief: bad command line")
         self.fails(self.run_ctx("brief", EPIC, "--registry"), 1, "USAGE brief: bad command line")

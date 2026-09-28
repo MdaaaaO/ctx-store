@@ -27,10 +27,6 @@ def split(text):
         if end < 0:
             raise CtxError("SCHEMA_VIOLATION", "frontmatter")
         lines.append(line)
-    for index in range(1, len(lines)):
-        if lines[index].rstrip() == FENCE:
-            return lines[1:index], "\n".join(lines[index + 1:])
-    raise CtxError("SCHEMA_VIOLATION", "frontmatter")
 
 
 def _scalar(raw):

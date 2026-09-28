@@ -86,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Referrer-Policy", "same-origin")
         for name, value in headers:
             self.send_header(name, value)
         self.end_headers()
@@ -176,7 +176,10 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.body()
         if raw is None:
             return None
-        if not self.origin_ok() and not (route == "/authorize" and self.headers.get("Origin") == auth.url):
+        if not self.origin_ok() and not (route == "/authorize" and self.headers.get("Origin") in (auth.url, "null")):
+            # The consent form is this server's own page. A browser names the page's origin when
+            # it posts the form, or `null` when the page asked for no referrer. What ties the post
+            # to a page this server showed is the form's one-time token, not the header.
             return self.send(403, {"error": "origin not allowed"})
         if route == "/mcp":
             return self.rpc(raw)

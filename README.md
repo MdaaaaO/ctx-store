@@ -37,7 +37,7 @@ Every call a harness hook needs is one line. A write names its store; a read may
 
 | When | Call |
 |---|---|
-| Setup on a new machine, or a schema upgrade | `ctx init --store <path> --settings <file> --types <folder>` (add `--replace` to upgrade) |
+| Setup on a new machine, or a schema upgrade | `ctx init --store <path> --settings <file> --types <folder>` (add `--upgrade` for a new version: files edited since are kept) |
 | After a change under the store | `ctx validate --changed` (add `--adopt` while writes still come from outside ctx) |
 | Heartbeat | `ctx touch --session <id>` |
 | Session start | `ctx brief --registry` |

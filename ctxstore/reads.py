@@ -2,7 +2,7 @@
 every store of the list, write nothing under a store and are not audited."""
 import re
 
-from . import frontmatter, fs, sections
+from . import frontmatter, fs, search, sections
 from .contract import CtxError
 from .store import HEAD, Doc, head_fields
 from .verbs import FULL, _budget, _fit
@@ -104,32 +104,30 @@ def _head(data):
 
 
 def find(stores, params, config):
-    """Two passes: every doc is matched on its bytes, and only the hits that
-    are shown are parsed into rows."""
-    needle = params.get("query", "").lower()
-    if not needle and "type" not in params and "tag" not in params:
+    """A scan in three steps: every doc is tested on its bytes, the docs that
+    can be hits are read as text and ranked, and the hits that are shown are
+    made into rows."""
+    query = params.get("query", "")
+    found = search.terms(query)
+    if not found and "type" not in params and "tag" not in params:
         raise CtxError("USAGE", "query")
-    plain = needle.isascii()
-    wanted, hits, seen = needle.encode("utf-8"), [], set()
+    wanted, seen, total = search.prepare(found), set(), 0
+    holders = [0] * len(found)  # per term, the docs that hold it
+    filtered = "type" in params or "tag" in params
+    likely = []  # (coarse rank, key, prefix, store, data): docs whose bytes hold every term
     for number, store in enumerate(stores, 1):
         prefix = f"{number}:" if len(stores) > 1 else ""
         for key in store.keys():
             if key in seen:
                 continue  # an earlier store of the list holds this key
             seen.add(key)
+            total += 1
             data = store.read(key, listed=True)
-            in_key = needle in key.lower()
-            if plain:  # bytes.lower() folds ASCII only, which is all an ASCII query needs
-                in_doc, in_head = wanted in data.lower(), wanted in _head(data).lower()
-            else:
-                try:
-                    text = data.decode("utf-8").lower()
-                except UnicodeDecodeError:
-                    continue
-                in_doc, in_head = needle in text, needle in _head(data).decode("utf-8", errors="replace").lower()
-            if not (in_key or in_doc):
+            if not search.held(found, wanted, key, data, holders):
                 continue
-            if "type" in params or "tag" in params:
+            low = key.lower()
+            in_key = [search.holds(term, low, search.squeeze(low)) for term in found]
+            if filtered:
                 fields = head_fields(data[:HEAD])
                 if fields is None:  # frontmatter longer than the head, or broken
                     try:
@@ -141,21 +139,63 @@ def find(stores, params, config):
                 tags = fields.get("tags")
                 if "tag" in params and params["tag"] not in (tags if isinstance(tags, list) else [tags]):
                     continue
-            hits.append((0 if in_key or in_head else 1, key, prefix, data))
-    hits.sort(key=lambda hit: hit[:2])
-    limit = None if params.get("out") == "auto" else _budget(params, 4096)
-    rows, used = [], 0
-    for _, key, prefix, data in hits:
-        if limit is not None and used > limit and head_fields(data[:HEAD]) is not None:
-            rows.append("")  # past the budget: counted, never shown; its head parses, the body is left alone
+            elif head_fields(data[:HEAD]) is None:
+                try:
+                    Doc(key, data)
+                except CtxError:
+                    continue  # a doc that does not parse is `validate`'s to report
+            head = _head(data).lower()
+            near = any(in_key) or any(plain is not None and plain in head for plain, _ in wanted)
+            likely.append((0 if near else 1, key, prefix, data))
+    # Every hit is counted; the ones that can come first are scored in full.
+    likely.sort(key=lambda one: one[:2])
+    hits, later = [], []
+    for coarse, key, prefix, data in likely:
+        if len(hits) >= search.SCORED:
+            later.append((key, prefix, data))
             continue
         try:
-            rows.append(_row(prefix, Doc(key, data), needle))
+            hit = search.Hit(key, Doc(key, data))
         except CtxError:
-            continue  # a doc that does not parse is `validate`'s to report
-        used += len(rows[-1].encode("utf-8")) + 1
-    data, text = _deliver(params, config, "find.txt", [f"{len(rows)} hits"] + rows, "hits", default=4096)
-    return {"hits": len(rows), **data}, text
+            continue
+        hit.prefix = prefix
+        hits.append(hit)
+    ranked = search.rank(hits, found, query, total, holders)
+    limit = None if params.get("out") == "auto" else _budget(params, 4096)
+    lines, rows, used = [], [], 0
+
+    def queue():
+        yield from ranked
+        for key, prefix, data in later:
+            yield None, (key, prefix, data)
+
+    for score, hit in queue():
+        if limit is not None and used > limit:
+            lines.append("")  # past the budget: counted, never shown
+            continue
+        if score is None:  # past the scored ones: made into a row only when it is shown
+            key, prefix, data = hit
+            hit = search.Hit(key, Doc(key, data))
+            hit.prefix = prefix
+        section = hit.section(found)[0] if found else None
+        doc = hit.doc
+        row = {
+            "doc": hit.prefix + hit.key,
+            "title": str(doc.fields.get("title") or doc.fields.get("session") or "-"),
+            "updated": str(doc.fields.get("updated") or doc.fields.get("heartbeat") or "-"),
+            "summary": hit.summary(found, section, SUMMARY) or "-",
+            "section": section,
+            "score": score,
+        }
+        cells = [row["doc"], row["title"], row["updated"], row["summary"]] + ([f"§ {section}"] if section else [])
+        lines.append(" · ".join(cells))
+        rows.append(row)
+        used += len(lines[-1].encode("utf-8")) + 1
+    data, text = _deliver(params, config, "find.txt", [f"{len(lines)} hits"] + lines, "hits", default=4096)
+    if "text" in data:
+        shown = len(data["text"].split("\n")) - 1 - (1 if data["truncated"] else 0)
+        data["rows"] = rows[:max(shown, 0)]
+    return {"hits": len(lines), **data}, text
 
 
 def _naming(stores, key):

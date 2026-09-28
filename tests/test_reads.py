@@ -74,9 +74,74 @@ class Find(StoreCase):
         shown = data["text"].split("\n")
         self.assertEqual(shown[-1], f"… {61 - (len(shown) - 1)} more hits, raise --budget")
 
+    def test_every_term_has_to_occur(self):
+        self.put("reference/apart", "---\ntitle: Apart\ntype: reference\n---\n\n## One\nThe dag failed.\n\n## Two\nA timeout followed.\n")
+        self.put("reference/partly", "---\ntitle: Partly\ntype: reference\n---\n\nThe dag failed, nothing else.\n")
+        for query in ("dag failed timeout", "timeout dag", "TIMEOUT  Failed"):
+            self.assertEqual(self.run_ctx("find", query)[1].split("\n")[:2],
+                             ["1 hits", "reference/apart · Apart · - · The dag failed. · § One"], query)
+        self.assertEqual(self.run_ctx("find", "dag failed")[1].split("\n")[0], "2 hits")
+        self.assertEqual(self.run_ctx("find", "dag failed zebra")[1], "0 hits\n")
+
+    def test_a_phrase_in_quotes(self):
+        self.put("reference/a", "---\ntitle: A\ntype: reference\n---\n\nThe dag failed twice.\n")
+        self.put("reference/b", "---\ntitle: B\ntype: reference\n---\n\nIt failed, the dag did.\n")
+        self.assertEqual(self.run_ctx("find", "dag failed")[1].split("\n")[:2],
+                         ["2 hits", "reference/a · A · - · The dag failed twice."])
+        self.assertEqual(self.run_ctx("find", '"dag failed"')[1], "1 hits\nreference/a · A · - · The dag failed twice.\n")
+        self.assertEqual(self.run_ctx("find", '"dag failed" twice')[1].split("\n")[0], "1 hits")
+
+    def test_plurals_hyphens_and_underscores(self):
+        self.put("reference/v", "---\ntitle: Variants\ntype: reference\n---\n\n## Order model\nThe roll-out of load_orders.\n")
+        for query in ("orders", "order", "rollout", "roll-out", "roll_out", "loadorders", "load-orders", "models"):
+            self.assertIn("reference/v", self.run_ctx("find", query)[1], query)
+        self.assertNotIn("reference/v", self.run_ctx("find", "rollout zebra")[1])
+
+    def test_rank_and_section(self):
+        self.put("reference/heading", "---\ntitle: H\ntype: reference\n---\n\n## Quokka care\nFeeding.\n\n## Other\nNothing.\n")
+        self.put("reference/body", "---\ntitle: B\ntype: reference\n---\n\n## Notes\nA quokka was seen.\n")
+        self.put("reference/quokka", "---\ntitle: Animals\ntype: reference\n---\n\nNo section, one quokka.\n")
+        self.put("reference/titled", "---\ntitle: The quokka file\ntype: reference\n---\n\nText.\n")
+        code, out, _ = self.run_ctx("find", "quokka", "--json")
+        data = json.loads(out)["data"]
+        self.assertEqual([row["doc"] for row in data["rows"]],
+                         ["reference/quokka", "reference/titled", "reference/heading", "reference/body"])
+        self.assertEqual([row["section"] for row in data["rows"]], [None, None, "Quokka care", "Notes"])
+        self.assertEqual(data["text"].split("\n")[3], "reference/heading · H · - · Feeding. · § Quokka care")
+        scores = [row["score"] for row in data["rows"]]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+    def test_a_rare_term_counts_for_more(self):
+        for number in range(12):
+            self.put(f"reference/c{number:02}", f"---\ntitle: Common {number}\ntype: reference\n---\n\ncommon word\n")
+        self.put("reference/by-common", "---\ntitle: About the common thing\ntype: reference\n---\n\nand a quokka\n")
+        self.put("reference/by-rare", "---\ntitle: About the quokka\ntype: reference\n---\n\nand a common thing\n")
+        data = json.loads(self.run_ctx("find", "common quokka", "--json")[1])["data"]
+        self.assertEqual([row["doc"] for row in data["rows"]], ["reference/by-rare", "reference/by-common"])
+        self.assertGreater(data["rows"][0]["score"], data["rows"][1]["score"])
+
+    def test_a_phrase_among_other_terms_is_rewarded(self):
+        self.put("reference/apart", "---\ntitle: A\ntype: reference\n---\n\nfailed dag, then twice the dag failed again\n")
+        self.put("reference/phrase", "---\ntitle: B\ntype: reference\n---\n\nthe dag failed twice\n")
+        data = json.loads(self.run_ctx("find", '"dag failed" twice', "--json")[1])["data"]
+        self.assertEqual([row["doc"] for row in data["rows"]], ["reference/phrase", "reference/apart"])
+
+    def test_more_hits_than_are_scored(self):
+        for number in range(340):
+            self.put(f"reference/n{number:03}", f"---\ntitle: Note {number}\ntype: reference\n---\n\nneedle {number}\n")
+        self.put("zz/needle-in-the-key", "---\ntitle: Last by key\ntype: reference\n---\n\ntext\n")
+        out = self.run_ctx("find", "needle")[1].split("\n")
+        self.assertEqual(out[:2], ["341 hits", "zz/needle-in-the-key · Last by key · - · text"])
+        scratch = os.path.join(self.work.name, "scratch")
+        path = self.run_ctx("find", "needle", "--out", "auto", CTX_SCRATCH=scratch)[1].strip()
+        with open(path) as handle:
+            rows = handle.read().splitlines()
+        self.assertEqual(len(rows), 342)
+        self.assertEqual(rows[-1], "reference/n339 · Note 339 · - · needle 339")
+
     def test_case_and_non_ascii(self):
         self.put("reference/umlaut", "---\ntitle: Über Größe\ntype: reference\n---\n\nDie STRASSE ist lang.\n")
-        for query in ("über", "ÜBER", "größe", "strasse", "Strasse"):
+        for query in ("über", "ÜBER", "größe", "strasse", "Strasse", "größe strasse", "lang über"):
             self.assertEqual(self.run_ctx("find", query)[1].split("\n")[0], "1 hits", query)
         self.assertTrue(self.run_ctx("find", "GRÖSSE")[1].startswith("0 hits"))
 

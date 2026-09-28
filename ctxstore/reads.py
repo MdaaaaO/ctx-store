@@ -35,8 +35,8 @@ def _deliver(params, config, name, lines, what="lines", default=FULL):
     return {"text": text, "bytes": len(text.encode("utf-8")) + 1, "truncated": truncated}, text
 
 
-def get(stores, params, config):
-    doc = _holding(stores, params["doc"]).load(params["doc"])
+def _slice(doc, params):
+    """The lines of a doc that `get` answers with."""
     if "section" in params:
         lines = sections.lines_of(doc.body, params["section"])
     else:
@@ -46,12 +46,48 @@ def get(stores, params, config):
     while lines and not lines[0].strip():
         lines.pop(0)
     if "tail" in params:
-        if params["tail"] < 1:
-            raise CtxError("USAGE", "--tail")
         kept = [line for _, line in sections.entries(lines)]
         lines = kept[-params["tail"]:]
-    data, text = _deliver(params, config, doc.key.replace("/", "--") + ".md", lines)
-    return {"doc": doc.key, **data}, text
+    return lines
+
+
+def get(stores, params, config):
+    if "tail" in params and params["tail"] < 1:
+        raise CtxError("USAGE", "--tail")
+    if ("doc" in params) == ("docs" in params):
+        raise CtxError("USAGE", "doc")
+    if "doc" in params:
+        doc = _holding(stores, params["doc"]).load(params["doc"])
+        data, text = _deliver(params, config, doc.key.replace("/", "--") + ".md", _slice(doc, params))
+        return {"doc": doc.key, **data}, text
+    keys = [key.strip() for key in params["docs"].split(",") if key.strip()]
+    if not keys or len(set(keys)) != len(keys):
+        raise CtxError("USAGE", "--docs")
+    docs = [_holding(stores, key).load(key) for key in keys]
+
+    def part(doc):
+        """A doc's lines; one that lacks the section says so and the others are still answered."""
+        try:
+            return _slice(doc, params)
+        except CtxError as failure:
+            return [failure.line()]
+    if params.get("out") == "auto":
+        lines = []
+        for doc in docs:
+            lines += [f"== {doc.key} =="] + part(doc)
+        data, text = _deliver(params, config, "get.md", lines)
+        return {"docs": [doc.key for doc in docs], **data}, text
+    # One budget for the call, shared evenly: no doc can crowd the others out.
+    share = max(_budget(params, FULL) // len(docs), 1)
+    parts, truncated = [], False
+    for doc in docs:
+        head = f"== {doc.key} =="
+        kept, cut = _fit(part(doc), max(share - len(head.encode("utf-8")) - 1, 1))
+        parts += [head] + kept
+        truncated = truncated or cut
+    text = "\n".join(parts)
+    return {"docs": [doc.key for doc in docs], "text": text, "bytes": len(text.encode("utf-8")) + 1,
+            "truncated": truncated}, text
 
 
 def _summary(doc, needle):

@@ -5,11 +5,10 @@ import re
 
 from . import frontmatter
 from .contract import CtxError
+from .links import LINK, WIKI, _names, _target, inbound
 from .store import decode
 from .verbs import _budget, _clock, _fit, _one_line
 
-LINK = re.compile(r"(\[[^\]\n]*\]\()([^)\s]+)(\))")
-WIKI = re.compile(r"\[\[([^\]|#\n]+)([|#][^\]\n]*)?\]\]")
 
 
 def _key(store, key):
@@ -128,43 +127,11 @@ def insert(store, params):
 
 # --- delete, rename, move ---------------------------------------------------
 
-def _target(source, link):
-    """The doc key a markdown link in `source` points at, or None."""
-    path = link.split("#", 1)[0]
-    if not path.endswith(".md") or re.match(r"[a-z][a-z0-9+.-]*:", path) or path.startswith("/"):
-        return None
-    return posixpath.normpath(posixpath.join(posixpath.dirname(source), path))[:-3]
-
-
-def _names(store, key):
-    """What a wikilink may call the doc: its key, and its name when no other
-    doc shares it."""
-    name = key.rsplit("/", 1)[-1]
-    shared = any(other != key and other.rsplit("/", 1)[-1] == name for other in store.keys())
-    return {key} if shared else {key, name}
-
-
-def _links(store, key):
-    """Keys of the docs that link to `key`, by a relative markdown link or a
-    wikilink of its key or its name."""
-    names = _names(store, key)
-    found = []
-    for other in store.keys():
-        if other == key:
-            continue
-        text = store.read(other, listed=True).decode("utf-8", errors="replace")
-        hit = any(_target(other, m.group(2)) == key for m in LINK.finditer(text))
-        hit = hit or any(m.group(1).strip() in names for m in WIKI.finditer(text))
-        if hit:
-            found.append(other)
-    return found
-
-
 def delete(store, params):
     key = _key(store, params["doc"])
     now, _ = _clock(params.get("now"))
     with store.locked():
-        links = _links(store, key) if store.has(key) else []
+        links = inbound(store, key) if store.has(key) else []
         row = store.apply("delete", key, lambda current: None, now)
     text = f"deleted: {key}"
     if links:
@@ -211,7 +178,7 @@ def rename(store, params, verb="rename"):
             raise CtxError("NO_SUCH_DOC", old)
         if store.has(fresh):
             raise CtxError("DOC_EXISTS", fresh)
-        linking, names = _links(store, old), _names(store, old)
+        linking, names = inbound(store, old), _names(store, old)
         moved = _relink(decode(store.read(old)), old, old, fresh, names, moved_to=fresh)
         store.apply(verb, fresh, lambda current: moved, now)
         store.apply(verb, old, lambda current: None, now)

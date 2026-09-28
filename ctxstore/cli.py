@@ -26,8 +26,8 @@ BUILT = {
     "log": (("doc", "text"), {"section": "text", "date": "text", "from": "file"}),
     "fm": (("doc", "field", "value"), {"from": "file"}),
     "touch": ((), {"session": "text", "working": "text"}),
-    "brief": (("doc",), {"registry": "flag", "session": "text", "budget": "int", "full": "flag"}),
-    "get": (("doc",), {"section": "text", "tail": "int", "budget": "int", "full": "flag", "out": "text"}),
+    "brief": (("doc",), {"registry": "flag", "session": "text", "links": "flag", "budget": "int", "full": "flag"}),
+    "get": (("doc",), {"docs": "text", "section": "text", "tail": "int", "budget": "int", "full": "flag", "out": "text"}),
     "find": (("query",), {"type": "text", "tag": "text", "budget": "int", "full": "flag", "out": "text"}),
     "resolve": (("key",), {}),
     "view": (("doc",), {"range": "text", "budget": "int", "full": "flag"}),
@@ -43,7 +43,7 @@ WRITES = ("create", "new", "str_replace", "insert", "delete", "rename", "move")
 READS = ("brief", "get", "find", "resolve", "validate")
 REQUIRED = {
     "log": ("doc", "text"), "fm": ("doc", "field", "value"), "touch": ("session",),
-    "get": ("doc",), "resolve": ("key",),
+    "resolve": ("key",),
     "create": ("doc",), "new": ("type", "doc"), "str_replace": ("doc", "old"),
     "insert": ("doc", "text", "line"), "delete": ("doc",), "rename": ("doc", "to"), "move": ("doc", "to"),
 }

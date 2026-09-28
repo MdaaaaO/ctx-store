@@ -348,7 +348,7 @@ ctx move <doc> <new>
 
 ### brief
 
-ctx brief <doc> | --registry | --session <id> [--budget <bytes>] [--full]
+ctx brief <doc> [--links] | --registry | --session <id> [--budget <bytes>] [--full]
 
 The cold-start read, within a byte budget (default 4096; above 8192 needs
 `--full`). What does not fit is replaced by one line that says how much is
@@ -356,6 +356,8 @@ missing.
 
 - `<doc>`: its frontmatter, its sections with their sizes, the 5 newest
   entries of its log.
+  With `--links`, also the docs it links to and the docs that link to it
+  (relative markdown links and wikilinks). That reads every doc of the store.
 - `--registry`: one line per session that has not ended: name, status, epic,
   what it is working on, heartbeat.
 - `--session <id>`: that session's doc, as for `<doc>`, then its body.
@@ -408,11 +410,16 @@ Exit 0; 1 `USAGE resolve.key_regex` when no store sets one; 2 `NO_SUCH_DOC`
 
 ### get
 
-ctx get <doc> [--section <heading>] [--tail <n>] [--budget <bytes>] [--full] [--out -|auto]
+ctx get <doc> | --docs <doc>,<doc>… [--section <heading>] [--tail <n>] [--budget <bytes>] [--full] [--out -|auto]
 
 One section of a doc, or its body; `--tail` keeps the last `n` entries
 (lines that are neither blank nor comments). Inside the byte budget
 (default 8192); `--out auto` as for `find`.
+
+`--docs` answers for several docs in one call, each under a line `== <doc>
+==`. The budget is the call's and is shared evenly, so one long doc cannot
+crowd the others out. A doc that lacks the section says so in its part; a doc
+that does not exist fails the call.
 
 Exit 0; 2 `NO_SUCH_DOC`, `NO_SUCH_SECTION`; 3 `AMBIGUOUS_SELECTOR`.
 

@@ -366,12 +366,25 @@ Exit 0; 2 `NO_SUCH_DOC`; 3 `AMBIGUOUS_SELECTOR`.
 
 ctx find [<query>] [--type <type>] [--tag <tag>] [--budget <bytes>] [--full] [--out -|auto]
 
-One row per hit: `key · title · updated · summary` (≤ 80 characters). The
-query is matched without case against key and frontmatter first, then the
-body. Hits that do not fit the budget (default 4096) are folded into a count.
+One row per hit, best first: `key · title · updated · summary` (≤ 80
+characters), then `· § <section>` when one `##` section holds the terms.
 
-`--out auto` writes the whole result to a file in `$CTX_SCRATCH` and prints
-its path.
+The query is terms: words, and phrases in double quotes. A doc is a hit when
+every term occurs in its key or its text. Matching folds case, ignores a
+plural `s` on a word and the `-` and `_` inside words: `orders` finds `Order
+model`, `rollout` finds `roll-out`. It does not know synonyms.
+
+Hits are ranked by where each term occurs (key and title, then tags and
+headings, then the rest), by how few docs hold the term, and higher when the
+terms occur as one phrase or in one section. Ties go by key. The 300 best
+candidates are ranked this way; hits past them follow in key order.
+
+Hits that do not fit the budget (default 4096) are folded into a count.
+`--json` adds `rows`: `doc` `title` `updated` `summary` `section` `score` for
+every hit shown. `--out auto` writes the whole result to a file in
+`$CTX_SCRATCH` and prints its path.
+
+find is a scan: there is no index to build or to lose.
 
 Exit 0 (no hit is `0 hits`); 1 `USAGE`.
 

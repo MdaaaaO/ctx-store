@@ -1,27 +1,27 @@
 | Lookup | Kind | Query | Hits | Right doc |
 |---|---|---|---:|---|
-| alert-known | multi-term | `orders_daily load_orders` | 0 | miss |
-| alert-signature | multi-term | `load_orders timed out warehouse` | 0 | miss |
-| alert-substring-name | multi-term | `orders_daily_v2 export late` | 0 | miss |
+| alert-known | multi-term | `orders_daily load_orders` | 1 | rank 1 |
+| alert-signature | multi-term | `load_orders timed out warehouse` | 1 | rank 1 |
+| alert-substring-name | multi-term | `orders_daily_v2 export late` | 1 | rank 1 |
 | alert-reworded | paraphrase | `pipeline stalled because the database was asleep` | 0 | miss |
-| session-owns-repo | variant | `shop models` | 1 | rank 1 |
-| trap-by-file | variant | `orders daily` | 0 | miss |
-| trap-late-orders | multi-term | `late orders reprocess` | 0 | miss |
+| session-owns-repo | variant | `shop models` | 3 | rank 2 |
+| trap-by-file | variant | `orders daily` | 2 | rank 2 |
+| trap-late-orders | multi-term | `late orders reprocess` | 1 | rank 1 |
 | column-in-body | single-term | `discount_amount` | 1 | rank 1 |
-| column-and-meaning | multi-term | `discount_amount null loyalty` | 0 | miss |
-| ticket-to-doc | single-term | `EX-202` | 2 | rank 2 |
+| column-and-meaning | multi-term | `discount_amount null loyalty` | 1 | rank 1 |
+| ticket-to-doc | single-term | `EX-202` | 2 | rank 1 |
 | ticket-cited-elsewhere | ranking | `EX-101` | 3 | rank 1 |
-| initiative-reworded | variant | `checkout rollout` | 0 | miss |
-| initiative-by-goal | multi-term | `new checkout every region` | 0 | miss |
-| role-access | multi-term | `analyst billing write` | 0 | miss |
-| repo-routing | multi-term | `shop-models channel labels` | 0 | miss |
-| decision-in-meeting | multi-term | `fallback provider two weeks` | 0 | miss |
-| tag-exact | single-term | `payments` | 2 | rank 1 |
+| initiative-reworded | variant | `checkout rollout` | 2 | rank 1 |
+| initiative-by-goal | multi-term | `new checkout every region` | 1 | rank 1 |
+| role-access | multi-term | `analyst billing write` | 1 | rank 1 |
+| repo-routing | multi-term | `shop-models channel labels` | 1 | rank 1 |
+| decision-in-meeting | multi-term | `fallback provider two weeks` | 1 | rank 1 |
+| tag-exact | single-term | `payments` | 3 | rank 1 |
 | phrase-exact | single-term | `Known traps to check on every PR` | 1 | rank 1 |
 
-multi-term: 0 of 9 at rank 1, 0 of 9 found
+multi-term: 9 of 9 at rank 1, 9 of 9 found
 paraphrase: 0 of 1 at rank 1, 0 of 1 found
-variant: 1 of 3 at rank 1, 1 of 3 found
-single-term: 3 of 4 at rank 1, 4 of 4 found
+variant: 1 of 3 at rank 1, 3 of 3 found
+single-term: 4 of 4 at rank 1, 4 of 4 found
 ranking: 1 of 1 at rank 1, 1 of 1 found
-all: 5 of 18 at rank 1, 6 of 18 found
+all: 15 of 18 at rank 1, 17 of 18 found

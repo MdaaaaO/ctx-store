@@ -63,23 +63,26 @@ not idle: compare a row with the first row of its own column. `python3 bench/ben
 
 | Call | 225 docs p50 | p95 | 3 000 docs p50 | p95 |
 |---|---:|---:|---:|---:|
-| start of the interpreter (`--version`) | 51 | 68 | 42 | 47 |
-| `brief <doc>` | 54 | 92 | 47 | 50 |
-| `get <doc> --section --tail 5` | 57 | 76 | 44 | 50 |
-| `view <doc>` | 50 | 56 | 43 | 53 |
-| `brief --registry` | 62 | 75 | 162 | 175 |
-| `brief --session <id>` | 63 | 72 | 154 | 164 |
-| `resolve <key>` | 57 | 71 | 126 | 157 |
-| `find <word in one doc>` | 53 | 57 | 149 | 164 |
-| `find <common word>` | 57 | 65 | 153 | 168 |
-| `find --tag` | 60 | 79 | 169 | 188 |
-| `validate` | 76 | 90 | 370 | 411 |
-| `validate --changed` | 62 | 72 | 239 | 285 |
+| start of the interpreter (`--version`) | 35 | 38 | 34 | 37 |
+| `brief <doc>` | 35 | 40 | 34 | 39 |
+| `get <doc> --section --tail 5` | 35 | 37 | 35 | 36 |
+| `view <doc>` | 34 | 35 | 35 | 39 |
+| `brief --registry` | 42 | 44 | 127 | 140 |
+| `brief --session <id>` | 42 | 50 | 127 | 134 |
+| `resolve <key>` | 41 | 46 | 103 | 107 |
+| `find <word in one doc>` | 44 | 45 | 155 | 163 |
+| `find <common word>` | 69 | 77 | 173 | 199 |
+| `find --tag` | 41 | 59 | 123 | 144 |
+| `validate` | 54 | 60 | 295 | 309 |
+| `validate --changed` | 49 | 55 | 184 | 194 |
 
 **No search cache.** The rule was: a cache enters only above 3 000 docs, with `find` over 200 ms at
 p95, or when a lookup needs ranked search a scan cannot give. At 3 000 docs every `find` stays under
-200 ms and no caller needs ranking, so the store has no index to build, validate or lose. The
-question returns when a store passes 3 000 docs.
+200 ms. `find` matches terms and ranks its hits as part of the same scan (`ctx help find`), which
+finds 17 of the 18 lookups in `bench/eval/` where the phrase match before it found 6; the one it
+misses is a paraphrase, which an index of words would miss too. So the store has no index to build,
+validate or lose. The question returns when a store passes 3 000 docs, or when lookups need
+synonyms.
 
 `validate --changed`, the call behind the after-write hook, stays under its 300 ms budget at 3 000 docs.
 

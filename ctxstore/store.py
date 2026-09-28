@@ -8,7 +8,8 @@ from .contract import CtxError
 
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 VERSION = re.compile(r"^(.+)\.v(\d+)$")
-STEP_KEYS = {"to", "rename_fields", "set_fields", "remove_fields", "rename_sections", "log_order", "replace_comments"}
+STEP_KEYS = {"to", "rename_fields", "set_fields", "remove_fields", "rename_sections", "log_order", "log_order_from",
+             "replace_comments"}
 TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
@@ -349,6 +350,9 @@ def _check_schema(name, schema):
             raise CtxError("SCHEMA_VIOLATION", where)
         if step.get("log_order", "oldest-first") not in ("oldest-first", "newest-first"):
             raise CtxError("SCHEMA_VIOLATION", where)
+        if "log_order_from" in step and ({step.get("log_order"), step["log_order_from"]}
+                                         != {"oldest-first", "newest-first"}):
+            raise CtxError("SCHEMA_VIOLATION", where)  # the other order, and only beside `log_order`
         pairs = step.get("replace_comments", [])
         if not all(isinstance(p, dict) and isinstance(p.get("old"), str) and p["old"]
                    and isinstance(p.get("new"), str) for p in pairs):

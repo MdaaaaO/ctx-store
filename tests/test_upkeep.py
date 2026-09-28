@@ -102,6 +102,9 @@ class Versions(UpkeepCase):
         for rules in ({"version": 2, "migrations": [{"to": 1}]}, {"version": 1, "migrations": [{"to": 2}]},
                       {"version": 1, "migrations": [{"to": 1, "rewrite_prose": True}]}, {"version": -1},
                       {"version": 1, "migrations": [{"to": 1, "log_order": "sideways"}]},
+                      {"version": 1, "migrations": [{"to": 1, "log_order_from": "newest-first"}]},
+                      {"version": 1, "migrations": [{"to": 1, "log_order": "oldest-first",
+                                                     "log_order_from": "oldest-first"}]},
                       {"version": 1, "migrations": [{"to": 1, "replace_comments": [{"old": "", "new": "x"}]}]},
                       {"version": 1, "migrations": [{"to": 1, "rename_fields": ["a"]}]}, {"version": "1"}):
             self.schema("epic", rules)
@@ -154,6 +157,29 @@ class Migrate(UpkeepCase):
         self.assertEqual(len(self.audit()), 3)
         self.assertEqual(self.run_ctx("log", "epics/old-style", "after the migration")[0], 0)
         self.assertTrue(self.text("epics/old-style").endswith("- 2026-01-03 — third.\n- 2026-01-08 — after the migration\n"))
+
+    def test_a_declared_source_order_reverses_a_log_of_one_day(self):
+        """Entries that all share a date read in either order; `log_order_from`
+        says which one they were written in. A log whose dates already read
+        in the target order is still left alone."""
+        one_day = NEWEST_FIRST.replace("2026-01-02", "2026-01-03").replace("2026-01-01", "2026-01-03")
+        self.put("epics/one-day", one_day)
+        self.put("epics/old-style", NEWEST_FIRST.replace(
+            "- 2026-01-03 — third.\n- 2026-01-02 — second.\n- 2026-01-01 — first.\n",
+            "- 2026-01-01 — first.\n- 2026-01-03 — second.\n- 2026-01-03 — third.\n"))
+        steps = [{**step, "log_order_from": "newest-first"} if step["to"] == 1 else step
+                 for step in EPIC_V2["migrations"]]
+        for source, expect in ((None, "third"), ("newest-first", "first")):
+            with self.subTest(source=source):
+                self.put("epics/one-day", one_day)
+                self.schema("epic", {**EPIC_V2, "migrations": steps if source else EPIC_V2["migrations"]})
+                self.assertEqual(self.run_ctx("migrate", "--apply")[0], 0)
+                log = [line for line in self.text("epics/one-day").split("\n") if line.startswith("- 2026")]
+                self.assertTrue(log[0].endswith(f" {expect}."), log)
+                self.assertIn("- 2026-01-01 — first.\n- 2026-01-03 — second.\n- 2026-01-03 — third.\n",
+                              self.text("epics/old-style"))  # already oldest-first: left alone
+                for key in ("epics/one-day", "epics/old-style", "epics/half-way", EPIC):
+                    self.put(key, self.text(key).replace("schema_version: epic.v2\n", ""))
 
     def test_a_doc_that_is_not_valid_after_its_steps_stops_the_run(self):
         self.put("epics/old-style", NEWEST_FIRST.replace("status: paused", "status: asleep"))

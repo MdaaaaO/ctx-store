@@ -70,7 +70,7 @@ The exit status and `error.code` are the first one's.
 |---|---|---|
 | `CTX_STORE` | walk up from the working directory | Store root, or a list separated like `PATH`; `--store` overrides it |
 | `CTX_NO_WALK` | unset | `1` turns the walk up off: without `CTX_STORE` or `--store` the result is `NO_STORE`. For tests, worktrees and temporary directories below a live store |
-| `CTX_ACTOR` | `$USER` | Who writes: the name of the audit file and of every row in it. Letters, digits, `.`, `_`, `-` |
+| `CTX_ACTOR` | `$USER` | Who writes: the name of the audit file and of every row in it. 1 to 64 of letters, digits, `.`, `_`, `-`; the first a letter or digit |
 | `CTX_LOCK_MODE` | probed | `flock` or `mkdir` forces the lock mode |
 | `CTX_LOCK_TIMEOUT` | `10` | Seconds a write waits for the lock before exit 4 |
 | `CTX_CACHE_DIR` | `$XDG_CACHE_HOME/ctx`, else `~/.cache/ctx` | Optional cache; never required, never created by a read |
@@ -92,13 +92,16 @@ takes the first directory that is a store root or holds a `.context/`
 directory that is one. A directory without the marker never matches.
 `CTX_NO_WALK=1` turns the walk off.
 
+With a list of stores, `doctor` reports every one; the other verbs of this
+version run on the first.
+
 A write runs only on a store named by `CTX_STORE` or `--store`; on a store
 found by the walk it fails with `STORE_NOT_NAMED`. Reads keep the walk and
 write nothing under the store.
 
 | Path | Holds |
 |---|---|
-| `ctx-store.json` | `schema_version`, and optionally `generated` and `ignore`: lists of glob patterns over doc paths. A generated doc is not validated and not writable (`GENERATED`); an ignored one is not a doc |
+| `ctx-store.json` | `schema_version`, and optionally `generated` and `ignore`: lists of glob patterns over doc paths. A generated doc is not validated and not writable (`GENERATED`); an ignored one is not a doc: every verb answers `NO_SUCH_DOC` for it |
 | `**/*.md` | The docs. A doc's key is its path without `.md` (`reference/lock-modes`) |
 | `.ctx/types/<type>.json` | One schema per doc type |
 | `.audit/<actor>.jsonl` | One row per write: `seq` (the store's write counter) `ts` `actor` `verb` `doc` `before` `after` (sha256 of the doc, `null` for none) |
@@ -123,6 +126,10 @@ A type schema is a JSON object; every key is optional:
 | `sections` | `##` headings every doc of the type has |
 | `log` | `section`: where `log` adds its entry; `order`: `oldest-first` (default, the entry goes last) or `newest-first` (the entry goes first); `grammar`: a regular expression every line of that section matches; `ledger: true`: `log` appends raw lines at the end of the doc |
 | `owner` | The field that names the doc's owner; a write by another actor fails with `NOT_OWNER` |
+
+A schema that cannot be applied (not an object, a key of the wrong shape, a
+`grammar` that is not a regular expression) fails every verb on the store
+with `SCHEMA_VIOLATION .ctx/types/<type>.json`.
 
 A doc of a type without a schema gets the general checks only: frontmatter
 parses, a type is known, no `##` heading appears twice.

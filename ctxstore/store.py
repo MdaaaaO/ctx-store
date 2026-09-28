@@ -33,6 +33,8 @@ class Store:
         self.named = named
         self.marker = fs.marker(root)
         self.types = fs.types(root)
+        for name, schema in self.types.items():
+            _check_schema(name, schema)
 
     # --- reading ---
 
@@ -46,8 +48,15 @@ class Store:
         skip = self.marker["generated"] + self.marker["ignore"]
         return [key for key in fs.list_docs(self.root) if not self._matches(key, skip)]
 
-    def read(self, key):
+    def path(self, key):
+        """(path, key) of a doc. An ignored path is not a doc."""
         path, key = fs.doc_path(self.root, key)
+        if self._matches(key, self.marker["ignore"]):
+            raise CtxError("NO_SUCH_DOC", key)
+        return path, key
+
+    def read(self, key):
+        path, key = self.path(key)
         return path, key, fs.read_bytes(path, key)
 
     def load(self, key):
@@ -135,7 +144,7 @@ class Store:
         the new text. Returns the audit row."""
         if not self.named:
             raise CtxError("STORE_NOT_NAMED")
-        path, key = fs.doc_path(self.root, key)
+        path, key = self.path(key)
         if self.generated(key):
             raise CtxError("GENERATED", key)
         if fs.read_only(self.root):
@@ -189,6 +198,31 @@ class Store:
         owner = doc.fields.get(field) if field else None
         if isinstance(owner, str) and owner and owner != actor:
             raise CtxError("NOT_OWNER", doc.key)
+
+
+def _check_schema(name, schema):
+    """A type schema that cannot be applied is a violation named by its file,
+    found when the store is opened, not in the middle of a write."""
+    where = f".ctx/types/{name}.json"
+    shapes = {"paths": list, "frontmatter": dict, "sections": list, "log": dict, "owner": str}
+    if not isinstance(schema, dict):
+        raise CtxError("SCHEMA_VIOLATION", where)
+    for key, shape in shapes.items():
+        if key in schema and not isinstance(schema[key], shape):
+            raise CtxError("SCHEMA_VIOLATION", where)
+    if not all(isinstance(rule, dict) for rule in schema.get("frontmatter", {}).values()):
+        raise CtxError("SCHEMA_VIOLATION", where)
+    if not all(isinstance(item, str) for item in schema.get("paths", []) + schema.get("sections", [])):
+        raise CtxError("SCHEMA_VIOLATION", where)
+    log = schema.get("log", {})
+    if log.get("order", "oldest-first") not in ("oldest-first", "newest-first"):
+        raise CtxError("SCHEMA_VIOLATION", where)
+    if "section" in log and not isinstance(log["section"], str):
+        raise CtxError("SCHEMA_VIOLATION", where)
+    try:
+        re.compile(log.get("grammar", ""))
+    except (re.error, TypeError):
+        raise CtxError("SCHEMA_VIOLATION", where) from None
 
 
 def _seq(row):

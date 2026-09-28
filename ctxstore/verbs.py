@@ -85,10 +85,8 @@ def log(store, params):
         if not name:
             raise CtxError("USAGE", "--section")
         line = f"- {date} — {text}"
-        order = schema.get("order", "oldest-first")
-        if order not in ("oldest-first", "newest-first"):
-            raise CtxError("SCHEMA_VIOLATION", "log.order")
-        add = sections.prepend_line if order == "newest-first" else sections.append_line
+        newest = schema.get("order") == "newest-first"
+        add = sections.prepend_line if newest else sections.append_line
 
         def change(current):
             head, body = current[: len(current) - len(_body(current))], _body(current)

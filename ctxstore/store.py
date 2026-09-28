@@ -187,8 +187,9 @@ class Store:
         has a gap). A gap is a write that started from a state no row had
         left, with no `adopt` at or after it: the doc changed outside ctx in
         between. Hashes link the rows and `seq` orders them, so actors' clocks
-        need not agree."""
-        rows = [row for row in self.backend.audit_rows() if isinstance(row.get("doc"), str)]
+        need not agree. An `init` row names a store file, not a doc."""
+        rows = [row for row in self.backend.audit_rows()
+                if isinstance(row.get("doc"), str) and row.get("verb") != "init"]
         after, adopted = {}, {}
         for row in rows:
             after.setdefault(row["doc"], set()).add(row.get("after"))

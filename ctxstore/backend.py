@@ -17,6 +17,7 @@ from .contract import CtxError
 
 SCHEME = re.compile(r"^([a-z][a-z0-9+.-]+)://(.*)$", re.S)
 SETTINGS = ("generated", "ignore")
+SCHEMA_VERSION = 1  # the layout a new store is created at
 
 
 class Backend:

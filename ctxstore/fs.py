@@ -199,6 +199,27 @@ def read_bytes(path, key, size=-1):
         raise CtxError("NO_SUCH_DOC", key) from None
 
 
+def read_file(path):
+    """A store file's bytes, or None when there is none."""
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise CtxError("STORE_READONLY", path) from None
+
+
+def entries(folder, option):
+    """(name, path, whether it is a file) of each entry of a folder the
+    command line names, sorted; USAGE <option> when it is not one."""
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        raise CtxError("USAGE", option) from None
+    return [(name, os.path.join(folder, name), os.path.isfile(os.path.join(folder, name))) for name in names]
+
+
 def read_payload(path):
     try:
         with open(path, "rb") as handle:

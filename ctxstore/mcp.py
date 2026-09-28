@@ -31,7 +31,7 @@ def tools():
     sections = spec.verbs()
     listed = []
     for verb in cli.VERBS:
-        if verb not in cli.BUILT:
+        if verb not in cli.BUILT or verb in cli.LOCAL:
             continue
         positional, options = cli.BUILT[verb]
         properties = {name: {"type": "string"} for name in positional}
@@ -55,7 +55,7 @@ def call(params, environ, store):
     from . import cli
     name = params.get("name") if isinstance(params, dict) else None
     verb = name[4:] if isinstance(name, str) and name.startswith("ctx_") else None
-    if verb not in cli.BUILT:
+    if verb not in cli.BUILT or verb in cli.LOCAL:
         raise LookupError(f"unknown tool: {name}")
     given = params.get("arguments") or {}
     if not isinstance(given, dict):

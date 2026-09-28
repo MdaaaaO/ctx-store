@@ -270,7 +270,8 @@ class Store:
         return self.backend.audit_append(actor, row)
 
     def adopt(self, key, data, now=None):
-        """Record the current state of a doc that changed outside ctx."""
+        """Record the current state of a doc that changed outside ctx; `data`
+        None records its deletion."""
         if not self.named:
             raise CtxError("STORE_NOT_NAMED")
         with self.locked():
@@ -280,7 +281,7 @@ class Store:
                 "verb": "adopt",
                 "doc": key,
                 "before": None,
-                "after": digest(data),
+                "after": None if data is None else digest(data),
             }
             row = self.backend.audit_append(self.config.actor, row)
         return row

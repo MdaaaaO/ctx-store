@@ -58,7 +58,11 @@ def validate(store, params):
         present = set(store.keys())
         for key in sorted(audited):
             if key not in present and key not in store.removed and not store.generated(key):
-                found.append(("UNAUDITED_WRITE", key, key))
+                if adopt:  # deleted outside ctx: the adopt row records the deletion
+                    store.adopt(key, None, now)
+                    adopted.append(key)
+                else:
+                    found.append(("UNAUDITED_WRITE", key, key))
     if found:
         raise Findings(found)
     data = {"checked": checked, "adopted": adopted, "warnings": warnings}

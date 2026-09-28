@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file. Generated b
 [conventional-release](https://github.com/MdaaaaO/conventional-release) from
 [Conventional Commits](https://www.conventionalcommits.org).
 
+## 0.2.0 (2026-09-28)
+
+
+### Features
+
+* **core:** find docs for a task described in a sentence (#21) ([#26](https://github.com/MdaaaaO/ctx-store/issues/26)) ([3f0770a](https://github.com/MdaaaaO/ctx-store/commit/3f0770a81e2260ef037d027d705e9581a1904c15))
+* **core:** show a doc's links, read several docs in one call (#29) ([#30](https://github.com/MdaaaaO/ctx-store/issues/30)) ([b49ec1e](https://github.com/MdaaaaO/ctx-store/commit/b49ec1e1409215b33303bc888d2a16f446c06e4e))
+* **core:** filter find by frontmatter fields (#31) ([#32](https://github.com/MdaaaaO/ctx-store/issues/32)) ([18333f4](https://github.com/MdaaaaO/ctx-store/commit/18333f47b251f39fde964c3e6cf22c1ad8fd6196))
+* **core:** show a doc's neighbours in brief (#33) ([#34](https://github.com/MdaaaaO/ctx-store/issues/34)) ([1c95ba5](https://github.com/MdaaaaO/ctx-store/commit/1c95ba53396af254858e3ddcd38ab9a3e7574fed))
+* **core:** set find's coverage from real first prompts (#21) ([#42](https://github.com/MdaaaaO/ctx-store/issues/42)) ([ec393e4](https://github.com/MdaaaaO/ctx-store/commit/ec393e401a0b89b3ff1271a948bcadc0d9d8a171))
+
+
+### Bug Fixes
+
+* **ci:** count the newest run of a check that was not skipped (#27) ([#28](https://github.com/MdaaaaO/ctx-store/issues/28)) ([6843faf](https://github.com/MdaaaaO/ctx-store/commit/6843fafcbe17a98c7b2f6a98c6631f99476bf379))
+* **mcp:** keep connections clean and client text out of the log (#40) ([#41](https://github.com/MdaaaaO/ctx-store/issues/41)) ([03b57f2](https://github.com/MdaaaaO/ctx-store/commit/03b57f208dda7756681a544ad938fd434a0e121e))
+
+
+### Documentation
+
+* **repo:** correct what a first set-up found (#35) ([#36](https://github.com/MdaaaaO/ctx-store/issues/36)) ([d5e34a9](https://github.com/MdaaaaO/ctx-store/commit/d5e34a933f893530de524b6c76f3294dfa9f4713))
+
+
+### Tests
+
+* **core:** read the version from its file (#38) ([#39](https://github.com/MdaaaaO/ctx-store/issues/39)) ([f97b35d](https://github.com/MdaaaaO/ctx-store/commit/f97b35da18dccc45a0ecf2c8ccdde46a17f38146))
+
 ## 0.1.0 (2026-09-28)
 
 

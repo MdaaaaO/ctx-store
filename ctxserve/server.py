@@ -90,7 +90,8 @@ class Handler(BaseHTTPRequestHandler):
         for name, value in headers:
             self.send_header(name, value)
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":  # the answer to HEAD is its headers
+            self.wfile.write(body)
 
     def refuse(self, failure):
         self.send(failure.status, {"error": failure.code, "error_description": failure.text})

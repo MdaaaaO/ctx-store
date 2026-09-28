@@ -271,7 +271,8 @@ class Find(StoreCase):
         self.assertEqual(keys("--where", "owner=nobody"), [])
         self.assertEqual(len(keys("--where", "owner!=nobody")), 7)
         self.assertEqual(keys("--where", "title=Sample rollout"), ["epics/paused", EPIC])
-        for bad in ("status", "=active", "status==", "status>active", "a=b,,c=d", ""):
+        for bad in ("status", "=active", "status==", "status==active", "status!==x", "status>==x", "status>active",
+                    "a=b,,c=d", ""):
             self.fails(self.run_ctx("find", "--where", bad), 1, "USAGE --where: bad command line")
 
     def test_usage(self):

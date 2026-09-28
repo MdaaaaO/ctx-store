@@ -209,7 +209,7 @@ def conditions(text):
     found = []
     for part in text.split(","):
         match = CONDITION.match(part.strip())
-        if not match or match.group(3).startswith("="):  # `==` is a slip, not a value
+        if not match or match.group(3).startswith("="):  # `==` is a slip; no value starts with `=`
             return None
         found.append((match.group(1), match.group(2), match.group(3).strip()))
     return found

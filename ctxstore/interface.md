@@ -385,7 +385,7 @@ model`, `rollout` finds `roll-out`. It does not know synonyms.
 by commas: `field=value`, `field!=value`, `field>=value`, `field<=value`
 (`status=active,updated>=2026-01-01`). A list field meets `=` when it holds
 the value. `>=` and `<=` compare as text, which orders dates and timestamps.
-A doc without the field meets only `!=`. A value cannot hold a comma. A query
+A doc without the field meets only `!=`. A value cannot hold a comma or start with `=`. A query
 is not needed with `--where`,
 `--type` or `--tag`.
 

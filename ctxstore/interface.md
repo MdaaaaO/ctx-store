@@ -532,7 +532,7 @@ not valid after its steps; otherwise as for `log`.
 
 ### init
 
-ctx init --store <path> [--settings <file>] [--types <folder>] [--templates <folder>] [--replace]
+ctx init --store <path> [--settings <file>] [--types <folder>] [--templates <folder>] [--replace | --upgrade]
 
 Make a Markdown store, or bring an existing one's settings, type schemas and
 templates to what a consumer hands over. The store is the one path of
@@ -559,11 +559,19 @@ that holds other content is `SCHEMA_VIOLATION <store file>`
 (`.ctx/types/epic.json`) and nothing is written, unless `--replace`: then it
 is overwritten. Files the run does not name are left alone.
 
+`--upgrade` is for a consumer's next version: a file that differs is
+replaced only while it holds what `init` last wrote there (the `after` of
+its latest `init` audit row), and kept otherwise, as someone edited it
+since: `kept` in the result, exit 0. A file that already holds the same
+content and has no `init` row yet, as in a store made by hand, gets one
+(`before` = `after`), the baseline for the next upgrade. `--upgrade` with
+`--replace` is `USAGE`.
+
 A new store's marker is written first, then the rest under the store lock.
 One audit row per file written, verb `init`, `doc` the store file;
-`validate --changed` passes over them. The result names each file `written`
-or `unchanged`; `--json` gives `store`, `written`, `unchanged`. Not offered
-over MCP.
+`validate --changed` passes over them. The result names each file `written`,
+`unchanged` or `kept`; `--json` gives `store`, `written`, `unchanged`, and
+`kept` with `--upgrade`. Not offered over MCP.
 
 Exit 0; 1 `USAGE`; 3 `SCHEMA_VIOLATION`; 4 `LOCK_TIMEOUT`; 5
 `STORE_READONLY` (a directory it cannot write), `STORE_NOT_NAMED`.

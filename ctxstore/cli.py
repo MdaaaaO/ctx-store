@@ -23,7 +23,7 @@ BUILT = {
     "validate": ((), {"changed": "flag", "adopt": "flag"}),
     "migrate": ((), {"check": "flag", "dry-run": "flag", "apply": "flag"}),
     "maintain": ((), {}),
-    "init": ((), {"settings": "text", "types": "text", "templates": "text", "replace": "flag"}),
+    "init": ((), {"settings": "text", "types": "text", "templates": "text", "replace": "flag", "upgrade": "flag"}),
     "log": (("doc", "text"), {"section": "text", "date": "text", "from": "file"}),
     "fm": (("doc", "field", "value"), {"from": "file"}),
     "touch": ((), {"session": "text", "working": "text"}),

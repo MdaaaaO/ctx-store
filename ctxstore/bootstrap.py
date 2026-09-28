@@ -8,7 +8,7 @@ import re
 from . import fs
 from .backend import SCHEMA_VERSION, SCHEME, SETTINGS, check_settings, open_store
 from .contract import CtxError
-from .store import _check_schema, digest
+from .store import _check_schema, _seq, digest
 from .verbs import _clock
 
 NAME = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
@@ -74,9 +74,33 @@ def _put(root, name, data):
         raise CtxError("STORE_READONLY", name)
 
 
+def _row(store, config, now, name, before, data):
+    store.audit_append(config.actor, {
+        "ts": now,
+        "actor": config.actor,
+        "verb": "init",
+        "doc": name,
+        "before": None if before is None else digest(before),
+        "after": digest(data),
+    })
+
+
+def _last_init(root, config):
+    """Store file -> the hash the latest `init` row left it with."""
+    if not fs.is_store(root):
+        return {}
+    last = {}
+    for row in sorted(open_store(root, config).audit_rows(), key=_seq):
+        if row.get("verb") == "init" and isinstance(row.get("doc"), str):
+            last[row["doc"]] = row.get("after")
+    return last
+
+
 def init(config, params):
     """Every input is checked before anything is written, so a refused run
     leaves no half-made store."""
+    if params.get("upgrade") and params.get("replace"):
+        raise CtxError("USAGE", "--upgrade")
     if not config.stores:
         raise CtxError("STORE_NOT_NAMED")
     if len(config.stores) > 1:
@@ -98,21 +122,30 @@ def init(config, params):
         files += _copies(params["types"], "--types", ".json", _schema)
     if "templates" in params:
         files += _copies(params["templates"], "--templates", ".md", _template)
-    plan, unchanged = [], []
+    # --upgrade replaces a file only while it holds what init last wrote there:
+    # one edited since is kept. A file that already matches, with no init row
+    # yet (a store made by hand), gets one as the baseline for the next upgrade.
+    upgrade = params.get("upgrade")
+    last = _last_init(root, config) if upgrade else {}
+    plan, unchanged, kept, baseline = [], [], [], []
     for name, data in files:
         before = fs.read_file(os.path.join(root, *name.split("/")))
         if before == data or (name == fs.MARKER and before is not None and _same(before, data)):
             unchanged.append(name)
-        elif before is not None and not params.get("replace"):
+            if upgrade and name not in last:
+                baseline.append((name, before))
+        elif before is not None and upgrade and last.get(name) != digest(before):
+            kept.append(name)
+        elif before is not None and not (params.get("replace") or upgrade):
             raise CtxError("SCHEMA_VIOLATION", name)
         else:
             plan.append((name, before, data))
-    if plan:
+    if plan or baseline:
         # The lock lives in the store and its mode is probed on the marker, so
         # a new store's marker is written first, unlocked: no other run opens
         # a directory without one. The rest, and every audit row, is written
         # under the lock.
-        fresh = plan[0][0] == fs.MARKER and plan[0][1] is None
+        fresh = bool(plan) and plan[0][0] == fs.MARKER and plan[0][1] is None
         if fresh:
             _put(root, fs.MARKER, plan[0][2])
         store = open_store(root, config)
@@ -120,15 +153,16 @@ def init(config, params):
             for name, before, data in plan:
                 if not (fresh and name == fs.MARKER):
                     _put(root, name, data)
-                store.audit_append(config.actor, {
-                    "ts": now,
-                    "actor": config.actor,
-                    "verb": "init",
-                    "doc": name,
-                    "before": None if before is None else digest(before),
-                    "after": digest(data),
-                })
+                _row(store, config, now, name, before, data)
+            for name, data in baseline:
+                _row(store, config, now, name, data, data)
     written = [name for name, _, _ in plan]
     lines = [f"ok: store {root}, {len(written)} written, {len(unchanged)} unchanged"]
-    lines += [f"{'written' if name in written else 'unchanged'}: {name}" for name, _ in files]
-    return {"store": root, "unchanged": unchanged, "written": written}, "\n".join(lines)
+    if upgrade:
+        lines[0] += f", {len(kept)} kept"
+    lines += [f"{'written' if name in written else 'kept' if name in kept else 'unchanged'}: {name}"
+              for name, _ in files]
+    data = {"store": root, "unchanged": unchanged, "written": written}
+    if upgrade:
+        data["kept"] = kept
+    return data, "\n".join(lines)

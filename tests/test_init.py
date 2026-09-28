@@ -108,6 +108,42 @@ class Init(unittest.TestCase):
         row = self.audit()[-1]
         self.assertEqual((len(self.audit()), row["doc"], row["before"]), (7, ".ctx/types/epic.json", before))
 
+    def test_upgrade_replaces_only_what_init_wrote(self):
+        """--upgrade (#57): a file still as init left it is replaced, one edited
+        since is kept and reported."""
+        self.init()
+        self.write(os.path.join(self.store, ".ctx", "types", "ledger.json"), '{"sections": ["Mine"]}\n')
+        self.write(os.path.join(self.types, "epic.json"), '{"sections": ["Goal"]}\n')
+        self.write(os.path.join(self.types, "ledger.json"), '{"sections": ["Theirs"]}\n')
+        code, out, _ = self.init("--upgrade")
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith(f"ok: store {self.store}, 1 written, 4 unchanged, 1 kept\n"), out)
+        self.assertIn("written: .ctx/types/epic.json\n", out)
+        self.assertIn("kept: .ctx/types/ledger.json\n", out)
+        self.assertEqual(self.read(".ctx/types/epic.json"), b'{"sections": ["Goal"]}\n')
+        self.assertEqual(self.read(".ctx/types/ledger.json"), b'{"sections": ["Mine"]}\n')
+        self.assertEqual(len(self.audit()), 7)
+        data = json.loads(self.init("--upgrade", "--json")[1])["data"]
+        self.assertEqual((data["written"], data["kept"]), ([], [".ctx/types/ledger.json"]))
+
+    def test_upgrade_records_a_baseline_for_a_store_made_by_hand(self):
+        self.init()
+        os.unlink(os.path.join(self.store, ".audit", "tester.jsonl"))  # the same files, no init rows: by hand
+        self.write(os.path.join(self.types, "epic.json"), '{"sections": ["Goal"]}\n')
+        code, out, _ = self.init("--upgrade")  # nothing proves epic.json unedited: kept
+        self.assertEqual(code, 0)
+        self.assertIn("kept: .ctx/types/epic.json\n", out)
+        self.assertEqual({row["doc"] for row in self.audit()}, set(FILES) - {".ctx/types/epic.json"})
+        self.assertTrue(all(row["before"] == row["after"] for row in self.audit()))
+        self.assertEqual(self.run_ctx("validate", "--changed")[0], 0)
+        shutil.copy(os.path.join(TYPES, "epic.json"), os.path.join(self.types, "epic.json"))
+        self.assertIn("unchanged: .ctx/types/epic.json\n", self.init("--upgrade")[1])  # its baseline now
+        self.write(os.path.join(self.types, "epic.json"), '{"sections": ["Goal"]}\n')
+        self.assertIn("written: .ctx/types/epic.json\n", self.init("--upgrade")[1])
+
+    def test_upgrade_and_replace_are_one_or_the_other(self):
+        self.assertEqual(self.init("--upgrade", "--replace")[:3:2], (1, "USAGE --upgrade: bad command line\n"))
+
     def test_bad_settings_create_nothing(self):
         settings = os.path.join(self.work.name, "settings.json")
         cases = (('{"schema_version": 1, "colour": true}', "colour"), ('{"schema_version": 2}', "schema_version"),

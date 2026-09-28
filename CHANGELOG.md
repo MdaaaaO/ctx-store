@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. Generated b
 [conventional-release](https://github.com/MdaaaaO/conventional-release) from
 [Conventional Commits](https://www.conventionalcommits.org).
 
+## 0.5.0 (2026-09-28)
+
+
+### Features
+
+* **core:** log_order steps can name the order they migrate from (#60) ([#61](https://github.com/MdaaaaO/ctx-store/issues/61)) ([54d21d8](https://github.com/MdaaaaO/ctx-store/commit/54d21d806387366ec3b2579b153f2c58a2f4f329))
+
 ## 0.4.0 (2026-09-28)
 
 

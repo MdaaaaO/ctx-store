@@ -2,7 +2,7 @@
 (data for the envelope, text for a terminal)."""
 import re
 
-from . import clock, frontmatter, sections
+from . import clock, frontmatter, links, sections
 from .contract import CtxError, Findings
 from .store import DATE, TIMESTAMP, digest
 
@@ -227,12 +227,19 @@ def brief(store, params):
     chosen = [name for name in ("registry", "session", "doc") if params.get(name)]
     if len(chosen) != 1:
         raise CtxError("USAGE", "brief")
+    if params.get("links") and chosen[0] != "doc":
+        raise CtxError("USAGE", "--links")
     if chosen[0] == "registry":
         lines = _registry_lines(store)
     elif chosen[0] == "session":
         lines = _doc_lines(store, _session(store, params["session"]), body=True)
     else:
-        lines = _doc_lines(store, store.load(params["doc"]))
+        doc = store.load(params["doc"])
+        lines = _doc_lines(store, doc)
+        if params.get("links"):
+            for label, keys in (("links to", links.outbound(store, doc)), ("linked from", links.inbound(store, doc.key))):
+                if keys:
+                    lines.append(f"{label}: {', '.join(keys)}")
     kept, truncated = _fit(lines, _budget(params))
     text = "\n".join(kept)
     return {"text": text, "bytes": len(text.encode("utf-8")) + 1, "truncated": truncated}, text

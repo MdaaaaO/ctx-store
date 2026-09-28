@@ -471,6 +471,20 @@ class Brief(StoreCase):
         self.assertGreater(len(full.encode()), 8192)
         self.assertLessEqual(len(full.encode()), 20000)
 
+    def test_links(self):
+        self.put("reference/links", "---\ntitle: L\ntype: reference\n---\n\nSee [the epic](../epics/sample-rollout.md#goal), "
+                 "[[lock-modes]], [[ledger|the ledger]], [[nothing]], [out](https://example.com/x.md), [gone](gone.md), "
+                 "[again](../epics/sample-rollout.md) and [[links]].\n")
+        self.put("epics/other", self.text(EPIC).replace("Sample rollout", "Other") + "\nSee [[lock-modes]].\n")
+        out = self.run_ctx("brief", "reference/links", "--links")[1].split("\n")
+        self.assertEqual(out[-2:], ["links to: epics/sample-rollout, reference/lock-modes, ledger", ""])
+        out = self.run_ctx("brief", "reference/lock-modes", "--links")[1].split("\n")
+        self.assertEqual(out[-2], "linked from: epics/other, reference/links")
+        self.assertNotIn("link", self.run_ctx("brief", "ledger")[1])
+        self.assertNotIn("links to", self.run_ctx("brief", "sessions/beta-docs", "--links")[1])
+        self.fails(self.run_ctx("brief", "--registry", "--links"), 1, "USAGE --links: bad command line")
+        self.fails(self.run_ctx("brief", "--session", "nobody", "--links"), 1, "USAGE --links: bad command line")
+
     def test_registry_with_long_frontmatter(self):
         long = self.text("sessions/alpha-rollout").replace("working_on: region three", "working_on: " + "x" * 6000)
         self.put("sessions/alpha-rollout", long)

@@ -246,9 +246,28 @@ class Bearer(ServeCase):
         self.server.log = io.StringIO()
         self.rpc({"jsonrpc": "2.0", "id": 1, "method": "ping"}, **{"MCP-Protocol-Version": "1999-01-01"})
         self.call("POST", "/mcp", "not json", {"Authorization": f"Bearer {TOKEN}"})
+        self.rpc([{"jsonrpc": "2.0", "id": 1, "method": "ping"}])
         self.rpc({"jsonrpc": "2.0", "id": 1, "method": "ping"})
         self.assertEqual(self.server.log.getvalue().splitlines(), [
-            "127.0.0.1 POST /mcp 400 protocol-version", "127.0.0.1 POST /mcp 400 not-json", "127.0.0.1 POST /mcp 200"])
+            "127.0.0.1 POST /mcp 400 protocol-version", "127.0.0.1 POST /mcp 400 not-json",
+            "127.0.0.1 POST /mcp 400 batch", "127.0.0.1 POST /mcp 200"])
+
+    def test_a_reason_belongs_to_one_request(self):
+        import io
+        self.server.log = io.StringIO()
+        good = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+        link = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            for method, body in (("POST", "not json"), ("DELETE", None), ("POST", "not json"), ("PUT", None)):
+                link.request(method, "/mcp", body=body, headers=good)
+                link.getresponse().read()
+                if method == "PUT":
+                    break
+        finally:
+            link.close()
+        self.assertEqual(self.server.log.getvalue().splitlines(), [
+            "127.0.0.1 POST /mcp 400 not-json", "127.0.0.1 DELETE /mcp 405",
+            "127.0.0.1 POST /mcp 400 not-json", "127.0.0.1 PUT /mcp 405"])
         # a body over the limit is refused on its headers; the server never reads it
         for length, status in (("1048577", b"413"), ("-1", b"411"), ("many", b"411")):
             with socket.create_connection(("127.0.0.1", self.port), timeout=10) as link:

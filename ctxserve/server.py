@@ -57,6 +57,10 @@ class Handler(BaseHTTPRequestHandler):
     # another method is `?`, another path `/…`. Nothing else a client sends is written. A
     # request line can carry a token, and a malformed one can carry anything.
 
+    def parse_request(self):
+        self.why = ""  # a reason belongs to one request; a connection carries many
+        return super().parse_request()
+
     def log_request(self, code="-", size="-"):
         if self.server.log:
             status = getattr(code, "value", code)
@@ -124,7 +128,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         auth, route = self.server.auth, self.route
-        self.why = ""
         self.unread()
         if not self.origin_ok():
             return self.send(403, {"error": "origin not allowed"})
@@ -177,7 +180,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         auth, route = self.server.auth, self.route
-        self.why = ""
         # The body is read before anything is decided, so a refusal leaves the connection
         # clean for the request that follows on it. It is bounded by LIMIT.
         raw = self.body()

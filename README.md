@@ -54,6 +54,12 @@ Every call a harness hook needs is one line. A write names its store; a read may
 Every built verb is a tool (`ctx_brief`, `ctx_find`, `ctx_log`, …). `ctx memory` takes the input of
 Anthropic's memory tool on stdin.
 
+## claude.ai
+
+`ctx-serve` puts the same tools behind HTTP with authentication (OAuth for claude.ai, a bearer token for
+Claude Code), for a store on your machine behind a tunnel: [`docs/connector.md`](docs/connector.md). It is
+a separate package; the core has no network.
+
 ## Speed
 
 Milliseconds per call as a caller sees it: a fresh process each time, interpreter start included

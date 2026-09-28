@@ -44,6 +44,17 @@ class Hygiene(unittest.TestCase):
                     self.assertNotEqual(node.func.id, "open", name)
 
 
+    def test_the_connector_is_standard_library_and_outside_the_core(self):
+        folder = os.path.join(ROOT, "ctxserve")
+        for name in sorted(os.listdir(folder)):
+            if name.endswith(".py"):
+                with open(os.path.join(folder, name), encoding="utf-8") as handle:
+                    tree = ast.parse(handle.read(), name)
+                for module in _imports(tree):
+                    self.assertTrue(module in sys.stdlib_module_names or module == "ctxstore", f"{name}: {module}")
+        for name, tree in _modules():
+            self.assertNotIn("ctxserve", list(_imports(tree)), name)
+
     def test_the_core_reaches_storage_through_the_backend_only(self):
         """Store data is the backend's; `fs` is for the Markdown backend and
         for files of a run that are not store data."""

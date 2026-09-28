@@ -146,8 +146,12 @@ class Handler(BaseHTTPRequestHandler):
         text = PAGE.format(name=html.escape(request["name"] or "An MCP client"), url=html.escape(self.server.auth.url),
                            host=html.escape(host), form=html.escape(self.server.auth.form(request)),
                            note=f'<p class="bad">{html.escape(note)}</p>' if note else "")
-        self.send(200, text, "text/html; charset=utf-8",
-                  headers=[("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'")])
+        # The form posts to this server and the answer sends the browser on to the client's
+        # callback. A browser holds that redirect to `form-action` too, so the callback's origin
+        # is named beside 'self'; it is one of the callbacks the server accepts at registration.
+        target = urllib.parse.urlsplit(request["redirect_uri"])
+        policy = f"default-src 'none'; style-src 'unsafe-inline'; form-action 'self' {target.scheme}://{target.netloc}"
+        self.send(200, text, "text/html; charset=utf-8", headers=[("Content-Security-Policy", policy)])
 
     def unread(self):
         """A request whose body is not read cannot share its connection: what is

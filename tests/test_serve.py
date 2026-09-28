@@ -359,7 +359,13 @@ class OAuth(ServeCase):
         self.assertEqual(status, 200)
         self.assertIn("claude.ai", page)
         self.assertEqual(headers["X-Frame-Options"], "DENY")
-        self.assertIn("form-action 'self'", headers["Content-Security-Policy"])
+        # the browser follows the redirect after the post only to an origin the policy names
+        self.assertEqual(headers["Content-Security-Policy"],
+                         "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://claude.ai")
+        local = self.register(["http://localhost:3118/callback"])
+        other = self.call("GET", "/authorize?" + urllib.parse.urlencode(
+            {**query, "client_id": local, "redirect_uri": "http://localhost:3118/callback"}))
+        self.assertTrue(other[1]["Content-Security-Policy"].endswith("form-action 'self' http://localhost:3118"))
         form = page.split('name="form" value="')[1].split('"')[0]
         self.assertEqual(self.call("POST", "/authorize", form={"form": form, "passphrase": SECRET})[0], 303)
         self.assertEqual(self.call("POST", "/authorize", form={"form": form, "passphrase": SECRET})[0], 400)

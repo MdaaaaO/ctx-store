@@ -75,11 +75,13 @@ def rename(body, old, new):
     return "\n".join(lines)
 
 
-def order_entries(body, name, order):
+def order_entries(body, name, order, source=None):
     """The body with the entries of one section in `order`, judged by the
     dates they start with. Entries that read the other way round are
     reversed; entries already in order, or in no order, are left alone.
-    Blank lines and comments stay where they are."""
+    With the `source` order declared, entries whose dates tie also read that
+    way round: a log of one busy day is reversed too. Blank lines and
+    comments stay where they are."""
     if name not in names(body) or name in duplicates(body):
         return body
     start, end = span(body, name)
@@ -87,7 +89,7 @@ def order_entries(body, name, order):
     found = [start + number - 1 for number, _ in entries(lines[start:end])]
     dates = [match.group(1) for match in (DATED.match(lines[index]) for index in found) if match]
     wanted = sorted(dates, reverse=order == "newest-first")
-    if len(dates) != len(found) or dates == wanted or dates != wanted[::-1]:
+    if len(dates) != len(found) or dates != wanted[::-1] or dates == wanted and not source:
         return body
     for index, line in zip(found, [lines[i] for i in reversed(found)]):
         lines[index] = line

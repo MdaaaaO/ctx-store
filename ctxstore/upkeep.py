@@ -34,7 +34,7 @@ def _migrated(store, doc, name):
             body = sections.rename(body, old, new)
             log = new if log == old else log
         if "log_order" in step and log:
-            body = sections.order_entries(body, log, step["log_order"])
+            body = sections.order_entries(body, log, step["log_order"], step.get("log_order_from"))
         for pair in step.get("replace_comments", []):
             body = sections.replace_in_comments(body, pair["old"], pair["new"])
         text = head + body

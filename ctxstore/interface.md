@@ -516,7 +516,10 @@ A type's `migrations` are numbered steps. A step may hold `rename_fields`
 and `rename_sections` (old → new), `set_fields` (field → value),
 `remove_fields`, `log_order` (`oldest-first` or `newest-first`: a log whose
 dated entries read the other way round is reversed; one already in order, or
-in no order, is left alone) and `replace_comments` (`old`, `new`: replaced inside HTML
+in no order, is left alone), `log_order_from` (beside `log_order`, the other
+order: the one the logs were written in, so entries whose dates all tie, one
+busy day, are reversed too; a log whose dates read in the target order is
+still left alone) and `replace_comments` (`old`, `new`: replaced inside HTML
 comments only). Steps touch frontmatter, section names and the order of log
 entries; prose is never rewritten. A doc takes each step once, so a second
 run changes nothing.

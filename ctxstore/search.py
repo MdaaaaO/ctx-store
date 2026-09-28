@@ -100,20 +100,13 @@ class Hit:
 
     def __init__(self, key, doc):
         self.key, self.doc = key, doc
-        self._text = self._squeezed = None
+        self._text = None
 
     @property
     def text(self):
         if self._text is None:
             self._text = self.doc.text.lower()
         return self._text
-
-    def has(self, term):
-        if term in self.text:
-            return True
-        if self._squeezed is None:
-            self._squeezed = squeeze(self.text)
-        return squeeze(term) in self._squeezed
 
     def weights(self, found):
         """Per term, the weight of the best place it occurs in."""

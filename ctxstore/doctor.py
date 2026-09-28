@@ -5,7 +5,7 @@ from . import __version__, fs
 from .contract import API
 
 
-def report(config, roots):
+def report(config, backends):
     return {
         "version": __version__,
         "api": API,
@@ -19,14 +19,8 @@ def report(config, roots):
             "exists": bool(config.cache_dir) and fs.exists(config.cache_dir),
         },
         "stores": [
-            {
-                "path": root,
-                "schema_version": fs.schema_version(root),
-                "filesystem": fs.filesystem(root),
-                "read_only": fs.read_only(root),
-                "lock_mode": config.lock_mode or fs.lock_mode(root),
-            }
-            for root in roots
+            {"backend": backend.name, "locator": backend.locator, **backend.describe()}
+            for backend in backends
         ],
     }
 
@@ -43,12 +37,11 @@ def text(data):
             "exists" if data["cache_dir"]["exists"] else "absent",
         ),
     ]
+    labels = {"schema_version": "schema version", "read_only": "read-only", "lock_mode": "lock mode"}
     for store in data["stores"]:
-        lines += [
-            f"store: {store['path']} (from {data['store_source']})",
-            f"  schema version: {store['schema_version']}",
-            f"  filesystem: {store['filesystem']}",
-            f"  read-only: {'yes' if store['read_only'] else 'no'}",
-            f"  lock mode: {store['lock_mode']}",
-        ]
+        lines.append(f"store: {store['locator']} ({store['backend']}, from {data['store_source']})")
+        for key, value in store.items():
+            if key not in ("backend", "locator", "path"):
+                shown = ("yes" if value else "no") if isinstance(value, bool) else value
+                lines.append(f"  {labels.get(key, key)}: {shown}")
     return "\n".join(lines)

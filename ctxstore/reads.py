@@ -133,7 +133,7 @@ def resolve(stores, params, config):
             if not re.fullmatch(shape, key):
                 continue
         except re.error:
-            raise CtxError("SCHEMA_VIOLATION", fs.MARKER) from None
+            raise CtxError("SCHEMA_VIOLATION", "resolve.key_regex") from None
         token = re.compile(r"(?<![A-Za-z0-9_#-])" + re.escape(key) + r"(?![A-Za-z0-9_-])")
         values = []
         for field in settings.get("fields", []):

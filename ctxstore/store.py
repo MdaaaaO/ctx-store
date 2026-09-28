@@ -3,7 +3,7 @@ import fnmatch
 import hashlib
 import re
 
-from . import frontmatter, fs, secrets, sections
+from . import clock, frontmatter, secrets, sections
 from .contract import CtxError
 
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -27,12 +27,13 @@ class Doc:
 
 
 class Store:
-    def __init__(self, root, config, named):
-        self.root = root
+    def __init__(self, backend, config, named):
+        self.backend = backend
+        self.locator = backend.locator
         self.config = config
         self.named = named
-        self.marker = fs.marker(root)
-        self.types = fs.types(root)
+        self.marker = backend.settings()
+        self.types = backend.types()
         for name, schema in self.types.items():
             _check_schema(name, schema)
 
@@ -46,29 +47,36 @@ class Store:
 
     def keys(self):
         skip = self.marker["generated"] + self.marker["ignore"]
-        return [key for key in fs.list_docs(self.root) if not self._matches(key, skip)]
+        return [key for key in self.backend.keys() if not self._matches(key, skip)]
 
-    def path(self, key):
-        """(path, key) of a doc. An ignored path is not a doc."""
-        path, key = fs.doc_path(self.root, key)
+    def key(self, key):
+        """The canonical key of a doc. An ignored key is not a doc."""
+        key = self.backend.key(key)
         if self._matches(key, self.marker["ignore"]):
             raise CtxError("NO_SUCH_DOC", key)
-        return path, key
+        return key
 
     def read(self, key):
-        path, key = self.path(key)
-        return path, key, fs.read_bytes(path, key)
+        return self.backend.read(self.key(key))
 
     def has(self, key):
         try:
-            path, _ = self.path(key)
+            return self.backend.exists(self.key(key))
         except CtxError:
             return False
-        return fs.exists(path)
+
+    def target(self, key):
+        """The canonical key of a doc a write is about to change."""
+        if not self.named:
+            raise CtxError("STORE_NOT_NAMED")
+        key = self.key(key)
+        if self.generated(key):
+            raise CtxError("GENERATED", key)
+        return key
 
     def load(self, key):
-        _, key, data = self.read(key)
-        return Doc(key, data)
+        key = self.key(key)
+        return Doc(key, self.backend.read(key))
 
     def type_of(self, doc):
         name = doc.fields.get("type")
@@ -129,7 +137,7 @@ class Store:
         left, with no `adopt` at or after it: the doc changed outside ctx in
         between. Hashes link the rows and `seq` orders them, so actors' clocks
         need not agree."""
-        rows = [row for row in fs.audit_rows(self.root) if isinstance(row.get("doc"), str)]
+        rows = [row for row in self.backend.audit_rows() if isinstance(row.get("doc"), str)]
         after, adopted = {}, {}
         for row in rows:
             after.setdefault(row["doc"], set()).add(row.get("after"))
@@ -155,11 +163,9 @@ class Store:
         the new text. Returns the audit row."""
         if not self.named:
             raise CtxError("STORE_NOT_NAMED")
-        path, key = self.path(key)
+        key = self.key(key)
         if self.generated(key):
             raise CtxError("GENERATED", key)
-        if fs.read_only(self.root):
-            raise CtxError("STORE_READONLY", self.root)
         secrets.scan(payload)
         with self.locked():
             return self.apply(verb, key, change, now, actor, check)
@@ -168,25 +174,25 @@ class Store:
         """The store lock, for a write that touches more than one doc."""
         if not self.named:
             raise CtxError("STORE_NOT_NAMED")
-        if fs.read_only(self.root):
-            raise CtxError("STORE_READONLY", self.root)
-        return fs.Lock(self.root, self.config.lock_timeout, self.config.lock_mode)
+        if self.backend.read_only():
+            raise CtxError("STORE_READONLY", self.locator)
+        return self.backend.lock()
 
     def apply(self, verb, key, change, now=None, actor=None, check=True):
         """One doc's write, under a lock the caller holds. `change` returning
         None removes the doc."""
-        path, key = fs.doc_path(self.root, key)
+        key = self.key(key)
         if self.generated(key):
             raise CtxError("GENERATED", key)
         actor = actor or self.config.actor
-        before = fs.read_bytes(path, key) if fs.exists(path) else None
+        before = self.backend.read(key) if self.backend.exists(key) else None
         if before is not None:
             self._owner_check(key, before, actor)
         text = change(None if before is None else _decode(before))
         if text is None:
             if before is None:
                 raise CtxError("NO_SUCH_DOC", key)
-            fs.remove(path)
+            self.backend.remove(key)
             data = None
         else:
             data = text.encode("utf-8")
@@ -195,33 +201,33 @@ class Store:
                 if found:
                     raise CtxError(*found[0])
             secrets.scan(text if before is None else _added(_decode(before), text))
-            written = fs.write_atomic(path, data)
+            written = self.backend.write(key, data)
             if digest(written) != digest(data):
                 raise CtxError("STORE_READONLY", key)
         row = {
-            "ts": now or fs.now_utc(),
+            "ts": now or clock.now_utc(),
             "actor": actor,
             "verb": verb,
             "doc": key,
             "before": None if before is None else digest(before),
             "after": None if data is None else digest(data),
         }
-        return fs.audit_append(self.root, actor, row)
+        return self.backend.audit_append(actor, row)
 
     def adopt(self, key, data, now=None):
         """Record the current state of a doc that changed outside ctx."""
         if not self.named:
             raise CtxError("STORE_NOT_NAMED")
-        with fs.Lock(self.root, self.config.lock_timeout, self.config.lock_mode):
+        with self.locked():
             row = {
-                "ts": now or fs.now_utc(),
+                "ts": now or clock.now_utc(),
                 "actor": self.config.actor,
                 "verb": "adopt",
                 "doc": key,
                 "before": None,
                 "after": digest(data),
             }
-            row = fs.audit_append(self.root, self.config.actor, row)
+            row = self.backend.audit_append(self.config.actor, row)
         return row
 
     def _owner_check(self, key, data, actor):

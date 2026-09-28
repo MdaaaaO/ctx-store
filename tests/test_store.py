@@ -294,6 +294,8 @@ class Log(StoreCase):
         self.assertEqual(self.audit(), [])
 
     def test_generated(self):
+        self.fails(self.run_ctx("log", "INDEX", "--section", "Log", "x"), 3, "GENERATED INDEX: doc is generated")
+        self.fails(self.run_ctx("fm", "INDEX", "title", "x"), 3, "GENERATED INDEX: doc is generated")
         self.put("INDEX", "---\ntitle: I\ntype: reference\n---\n\n## Log\n")
         self.fails(self.run_ctx("log", "INDEX", "--section", "Log", "x"), 3, "GENERATED INDEX: doc is generated")
 

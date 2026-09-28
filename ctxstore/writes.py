@@ -3,7 +3,7 @@ remove docs. Every one goes through the store's write path."""
 import posixpath
 import re
 
-from . import fs, secrets
+from . import secrets
 from .contract import CtxError
 from .verbs import _budget, _clock, _fit, _one_line
 
@@ -12,20 +12,20 @@ WIKI = re.compile(r"\[\[([^\]|#\n]+)([|#][^\]\n]*)?\]\]")
 
 
 def _key(store, key):
-    return fs.doc_path(store.root, key)[1]
+    return store.key(key)
 
 
 # --- view -------------------------------------------------------------------
 
 def view(store, params):
     target = params.get("doc", "")
-    folder = fs.folder(store.root, target)
+    folder = store.backend.folder(target)
     if folder is not None:
         prefix = folder + "/" if folder else ""
         keys = [key for key in store.keys() if key.startswith(prefix)]
         if not keys and folder:
             raise CtxError("NO_SUCH_DOC", target)
-        lines = [f"{len(keys)} docs"] + [f"{key}.md ({len(store.read(key)[2])} bytes)" for key in keys]
+        lines = [f"{len(keys)} docs"] + [f"{key}.md ({len(store.read(key))} bytes)" for key in keys]
         kept, truncated = _fit(lines, _budget(params), "docs")
         return {"docs": keys, "truncated": truncated}, "\n".join(kept)
     doc = store.load(target)
@@ -48,7 +48,7 @@ def view(store, params):
 # --- create, new ------------------------------------------------------------
 
 def _scaffold(store, name, key, title, date):
-    text = fs.template(store.root, name)
+    text = store.backend.template(name)
     if text is None:
         text = "---\ntitle: {{TITLE}}\ntype: {{TYPE}}\nupdated: {{DATE}}\n---\n\n# {{TITLE}}\n"
     values = {"TITLE": title, "TYPE": name, "DATE": date, "KEY": key, "SLUG": key.rsplit("/", 1)[-1]}
@@ -141,7 +141,7 @@ def _links(store, key):
     for other in store.keys():
         if other == key:
             continue
-        text = store.read(other)[2].decode("utf-8", errors="replace")
+        text = store.read(other).decode("utf-8", errors="replace")
         hit = any(_target(other, m.group(2)) == key for m in LINK.finditer(text))
         hit = hit or any(m.group(1).strip() in names for m in WIKI.finditer(text))
         if hit:
@@ -203,7 +203,7 @@ def rename(store, params, verb="rename"):
         if store.has(fresh):
             raise CtxError("DOC_EXISTS", fresh)
         linking = _links(store, old)
-        moved = _relink(store.read(old)[2].decode("utf-8"), old, old, fresh, moved_to=fresh)
+        moved = _relink(store.read(old).decode("utf-8"), old, old, fresh, moved_to=fresh)
         secrets.scan("")
         store.apply(verb, fresh, lambda current: moved, now)
         store.apply(verb, old, lambda current: None, now)

@@ -11,6 +11,12 @@ Production-grade by design: Python stdlib only (≥ 3.10), runs from a plain cop
 exit-code table, `--json` envelope (`"api": 1`), temp + rename writes under a lock, secret guard on every
 payload, read-only store support, no writable state under the store for reads.
 
+## Interface first
+
+The interface is the contract: verbs, fixed errors and the doc model. Storage is a backend behind it.
+Markdown files are the default backend, so a store stays a folder you can read and edit; the same calls
+give the same answers on any other backend (`ctxstore/backend.py`, `ctx help backends`).
+
 ## Try it
 
 ```sh

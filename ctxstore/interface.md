@@ -13,8 +13,8 @@ Writes        log fm row new move
 Reads         brief find resolve get
 Maintenance   validate doctor maintain touch migrate
 
-Topics        exit-codes errors output environment store docs selectors budgets payloads
-              front-ends
+Topics        exit-codes errors output environment stores backends markdown-backend
+              docs selectors budgets payloads front-ends
 
 Available in this version: every verb except maintain, migrate and row.
 
@@ -73,10 +73,10 @@ The exit status and `error.code` are the first one's.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `CTX_STORE` | walk up from the working directory | Store root, or a list separated like `PATH`; `--store` overrides it |
-| `CTX_NO_WALK` | unset | `1` turns the walk up off: without `CTX_STORE` or `--store` the result is `NO_STORE`. For tests, worktrees and temporary directories below a live store |
+| `CTX_STORE` | walk up from the working directory | A store locator, or a list separated like `PATH`; `--store` overrides it (`ctx help stores`) |
+| `CTX_NO_WALK` | unset | Markdown backend. `1` turns the walk up off: without `CTX_STORE` or `--store` the result is `NO_STORE`. For tests, worktrees and temporary directories below a live store |
 | `CTX_ACTOR` | `$USER` | Who writes: the name of the audit file and of every row in it. 1 to 64 of letters, digits, `.`, `_`, `-`; the first a letter or digit |
-| `CTX_LOCK_MODE` | probed | `flock` or `mkdir` forces the lock mode |
+| `CTX_LOCK_MODE` | probed | Markdown backend. `flock` or `mkdir` forces the lock mode |
 | `CTX_LOCK_TIMEOUT` | `10` | Seconds a write waits for the lock before exit 4 |
 | `CTX_CACHE_DIR` | `$XDG_CACHE_HOME/ctx`, else `~/.cache/ctx` | Optional cache; never required, never created by a read |
 | `CTX_SCRATCH` | unset | Directory for temporary payload files |
@@ -86,26 +86,65 @@ Nothing else is read from the environment (`USER` and `LOGNAME` name the
 actor when `CTX_ACTOR` is unset), and nothing from `$HOME` except the cache
 directory.
 
-## Store
+## Stores
 
-A store root is a directory that holds `ctx-store.json`:
+The interface is the contract: verbs, errors and the doc model. A store keeps
+the docs behind it, in a backend. Markdown files are the default backend; the
+same calls give the same answers on any other.
+
+A store is named by a locator: a directory path (a Markdown store), or
+`<scheme>://<rest>`. `CTX_STORE` takes one locator or a list separated like
+`PATH`. An unknown scheme, or a locator that names no store, is `NO_STORE`.
+
+| Backend | Locator | Keeps docs |
+|---|---|---|
+| `markdown` | a path, or `markdown://<path>` | as `*.md` files in a directory (`ctx help markdown-backend`) |
+| `memory` | `memory://<name>` | in the process; for tests of callers, and the reference for writing a backend |
+
+A write runs only on a store named by `CTX_STORE` or `--store`; on a store
+found without being named it fails with `STORE_NOT_NAMED`. Reads are not
+audited and not gated: that is a decision, not a gap.
+
+With a list of stores, a read looks in every store in order (a doc key found
+in an earlier store hides the same key in a later one; rows carry the store's
+number, `2:reference/x`). A write goes to the first store that holds the doc
+it names, else to the first store.
+
+Every store has settings, whatever the backend:
+
+| Setting | Meaning |
+|---|---|
+| `schema_version` | The version of the store's layout and schemas |
+| `generated` | Glob patterns over doc keys (`INDEX.md`): docs another tool writes. Not validated, not writable (`GENERATED`) |
+| `ignore` | Glob patterns: not docs. Every verb answers `NO_SUCH_DOC` for them |
+| `resolve` | `key_regex`, `fields`, `section` (`ctx help resolve`) |
+
+Every write leaves one audit row: `seq` (the store's write counter) `ts`
+`actor` `verb` `doc` `before` `after` (sha256 of the doc, `null` for none).
+
+## Backends
+
+A backend provides: the settings, the type schemas and templates, the doc
+keys, read, write (whole or not at all), remove, a lock with a timeout, the
+audit rows, whether the store is read-only, and what `doctor` reports. The
+core does the rest: validation, the secret guard, owners, sections, budgets,
+links. `ctxstore/backend.py` is the interface; its `memory` backend is the
+shortest complete example.
+
+The core is standard library only. A backend that needs a driver is a
+package of its own.
+
+## Markdown backend
+
+A store root is a directory that holds `ctx-store.json`, the settings:
 
     {"schema_version": 1}
 
 Without `CTX_STORE` or `--store`, ctx walks up from the working directory and
 takes the first directory that is a store root or holds a `.context/`
 directory that is one. A directory without the marker never matches.
-`CTX_NO_WALK=1` turns the walk off.
-
-A write runs only on a store named by `CTX_STORE` or `--store`; on a store
-found by the walk it fails with `STORE_NOT_NAMED`. Reads keep the walk and
-write nothing under the store. Reads are not audited and not gated: that is
-a decision, not a gap.
-
-With a list of stores, a read looks in every store in order (a doc key found
-in an earlier store hides the same key in a later one; rows carry the store's
-number, `2:reference/x`). A write goes to the first store that holds the doc
-it names, else to the first store.
+`CTX_NO_WALK=1` turns the walk off. A store found by the walk is not named:
+reads work, writes fail with `STORE_NOT_NAMED`.
 
 | Path | Holds |
 |---|---|
@@ -119,6 +158,14 @@ it names, else to the first store.
 
 Directories whose name starts with a dot hold no docs.
 
+Files can change without ctx. `validate --changed` finds that
+(`UNAUDITED_WRITE`); `--adopt` records it.
+
+The lock is `flock` where a probe proves it, an atomic `mkdir` lock
+otherwise (`ctx help doctor`). A write is a temp file in the doc's directory,
+fsync, rename, then a re-read that must give the same bytes. Reads write
+nothing under the store.
+
 ## Docs
 
 A doc starts with frontmatter between two `---` lines: one `key: value` per
@@ -126,7 +173,8 @@ line, the value a scalar or an inline list `[a, b]`. Nested and multi-line
 values are violations. The doc's type is its `type` field, or the type whose
 schema names its path.
 
-A type schema is a JSON object; every key is optional:
+A type schema is a JSON object (in a Markdown store, `.ctx/types/<type>.json`);
+every key is optional:
 
 | Key | Meaning |
 |---|---|
@@ -351,12 +399,13 @@ Exit 0 with the number of docs checked; 3 with one line per finding.
 
 ### doctor
 
-ctx doctor [--json] [--store <path>]
+ctx doctor [--json] [--store <locator>]
 
 Report what this machine and store give the tool: ctx version and api, Python
 version, lock timeout, git switch, scratch and cache directory, how the store
-was found (`flag`, `env` or `walk`), and per store
-the path, schema version, filesystem type, read-only state and lock mode.
+was found (`flag`, `env` or `walk`), and per store its backend, its locator
+and what the backend reports. A Markdown store reports the schema version,
+filesystem type, read-only state and lock mode.
 
 Lock mode is `flock` where a probe proves it (two descriptors on the marker
 file, the second must be refused), `mkdir` on a writable store without flock,

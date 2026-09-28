@@ -47,6 +47,7 @@ def doctor_stable(stdout):
     data["python"] = "<python>"
     for store in data["stores"]:
         store["path"] = "<store>"
+        store["locator"] = "<store>"
         store["filesystem"] = "<filesystem>"
         store["lock_mode"] = "<lock>"
         store["read_only"] = "<read-only>"

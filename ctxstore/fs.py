@@ -1,7 +1,5 @@
-"""The one module that touches the filesystem.
-
-P0 only reads: nothing here writes under a store.
-"""
+"""The one module that touches the filesystem: for the Markdown backend, and
+for the files of a run that are not store data (payloads, scratch, the spec)."""
 import json
 import os
 import signal
@@ -53,18 +51,8 @@ def find_store(start):
         current = parent
 
 
-def resolve_stores(configured, start, walk=True):
-    if configured:
-        roots = []
-        for path in configured:
-            if not is_store(path):
-                raise CtxError("NO_STORE", path)
-            roots.append(os.path.realpath(path))
-        return roots
-    root = find_store(start) if walk else None
-    if root is None:
-        raise CtxError("NO_STORE")
-    return [root]
+def canonical(path):
+    return os.path.realpath(path)
 
 
 def schema_version(root):
@@ -143,21 +131,10 @@ def lock_mode(root):
 # --- docs -------------------------------------------------------------------
 
 def marker(root):
-    """The marker file's content, with the optional lists defaulted."""
-    version = schema_version(root)
+    """The marker file's content."""
+    schema_version(root)
     with open(os.path.join(root, MARKER), encoding="utf-8") as handle:
-        data = json.load(handle)
-    config = {"schema_version": version}
-    for key in ("generated", "ignore"):
-        value = data.get(key, [])
-        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
-            raise CtxError("SCHEMA_VIOLATION", MARKER)
-        config[key] = value
-    resolve = data.get("resolve", {})
-    if not isinstance(resolve, dict):
-        raise CtxError("SCHEMA_VIOLATION", MARKER)
-    config["resolve"] = resolve
-    return config
+        return json.load(handle)
 
 
 def write_scratch(folder, name, data):
@@ -227,14 +204,6 @@ def read_payload(path):
             return handle.read()
     except OSError:
         raise CtxError("USAGE", path) from None
-
-
-def now_utc():
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
-
-def today():
-    return time.strftime("%Y-%m-%d", time.localtime())
 
 
 # --- writes -----------------------------------------------------------------

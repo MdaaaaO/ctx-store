@@ -2,7 +2,7 @@
 (data for the envelope, text for a terminal)."""
 import re
 
-from . import clock, frontmatter, links, sections
+from . import clock, frontmatter, links, search, sections
 from .contract import CtxError, Findings
 from .store import DATE, TIMESTAMP, digest
 
@@ -227,8 +227,9 @@ def brief(store, params):
     chosen = [name for name in ("registry", "session", "doc") if params.get(name)]
     if len(chosen) != 1:
         raise CtxError("USAGE", "brief")
-    if params.get("links") and chosen[0] != "doc":
-        raise CtxError("USAGE", "--links")
+    for option in ("links", "near"):
+        if params.get(option) and chosen[0] != "doc":
+            raise CtxError("USAGE", f"--{option}")
     if chosen[0] == "registry":
         lines = _registry_lines(store)
     elif chosen[0] == "session":
@@ -236,10 +237,25 @@ def brief(store, params):
     else:
         doc = store.load(params["doc"])
         lines = _doc_lines(store, doc)
+        there, back = [], []
+        if params.get("links") or params.get("near"):
+            there, back = links.outbound(store, doc), links.inbound(store, doc.key)
         if params.get("links"):
-            for label, keys in (("links to", links.outbound(store, doc)), ("linked from", links.inbound(store, doc.key))):
+            for label, keys in (("links to", there), ("linked from", back)):
                 if keys:
                     lines.append(f"{label}: {', '.join(keys)}")
+        if params.get("near"):
+            # One line per neighbour, the docs it names before the docs that name it.
+            for mark, keys in (("→", there), ("←", [key for key in back if key not in there])):
+                for key in keys:
+                    try:
+                        near = store.load(key, listed=True)
+                    except CtxError:
+                        continue  # a doc that does not parse is `validate`'s to report
+                    cells = [f"{mark} {key}", str(near.fields.get("title") or near.fields.get("session") or "-"),
+                             str(near.fields.get("updated") or near.fields.get("heartbeat") or "-"),
+                             search.Hit(key, near, []).summary([], None, 80) or "-"]
+                    lines.append(" · ".join(cells))
     kept, truncated = _fit(lines, _budget(params))
     text = "\n".join(kept)
     return {"text": text, "bytes": len(text.encode("utf-8")) + 1, "truncated": truncated}, text

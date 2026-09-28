@@ -26,7 +26,7 @@ BUILT = {
     "log": (("doc", "text"), {"section": "text", "date": "text", "from": "file"}),
     "fm": (("doc", "field", "value"), {"from": "file"}),
     "touch": ((), {"session": "text", "working": "text"}),
-    "brief": (("doc",), {"registry": "flag", "session": "text", "links": "flag", "budget": "int", "full": "flag"}),
+    "brief": (("doc",), {"registry": "flag", "session": "text", "links": "flag", "near": "flag", "budget": "int", "full": "flag"}),
     "get": (("doc",), {"section": "text", "tail": "int", "budget": "int", "full": "flag", "out": "text"}),
     "find": (("query",), {"type": "text", "tag": "text", "where": "text", "budget": "int", "full": "flag", "out": "text"}),
     "resolve": (("key",), {}),

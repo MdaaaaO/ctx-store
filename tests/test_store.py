@@ -485,6 +485,25 @@ class Brief(StoreCase):
         self.fails(self.run_ctx("brief", "--registry", "--links"), 1, "USAGE --links: bad command line")
         self.fails(self.run_ctx("brief", "--session", "nobody", "--links"), 1, "USAGE --links: bad command line")
 
+    def test_near(self):
+        self.put("reference/links", "---\ntitle: L\ntype: reference\nupdated: 2026-01-09\n---\n\nSee [the epic]"
+                 "(../epics/sample-rollout.md) and [[lock-modes]].\n")
+        self.put("epics/other", self.text(EPIC).replace("Sample rollout", "Other") + "\nSee [[links]] and [[lock-modes]].\n")
+        self.put("reference/lock-modes", self.text("reference/lock-modes") + "\nBack to [[links]].\n")
+        out = self.run_ctx("brief", "reference/links", "--near")[1].split("\n")
+        self.assertEqual(out[-4:-1], [
+            "→ epics/sample-rollout · Sample rollout · 2026-01-07 · - Tracking issue: EX-1",
+            "→ reference/lock-modes · Lock modes · 2026-01-05 · `flock` on local filesystems, the `mkdir` lock where flock cannot be proven.",
+            "← epics/other · Other · 2026-01-07 · - Tracking issue: EX-1"])
+        self.assertNotIn("links to:", "\n".join(out))
+        both = self.run_ctx("brief", "reference/links", "--near", "--links")[1]
+        self.assertIn("links to: epics/sample-rollout, reference/lock-modes\nlinked from: epics/other, reference/lock-modes\n→ ", both)
+        self.assertNotIn("→", self.run_ctx("brief", "ledger", "--near")[1])
+        data = json.loads(self.run_ctx("brief", "reference/links", "--near", "--budget", "200", "--json")[1])["data"]
+        self.assertTrue(data["truncated"])
+        self.assertLessEqual(data["bytes"], 200)
+        self.fails(self.run_ctx("brief", "--registry", "--near"), 1, "USAGE --near: bad command line")
+
     def test_registry_with_long_frontmatter(self):
         long = self.text("sessions/alpha-rollout").replace("working_on: region three", "working_on: " + "x" * 6000)
         self.put("sessions/alpha-rollout", long)

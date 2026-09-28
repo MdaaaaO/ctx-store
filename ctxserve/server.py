@@ -215,10 +215,6 @@ class Handler(BaseHTTPRequestHandler):
         auth = self.server.auth
         if not auth.allows(self.headers.get("Authorization")):
             return self.send(401, {"error": "unauthorized"}, headers=[("WWW-Authenticate", auth.challenge())])
-        version = self.headers.get("MCP-Protocol-Version")
-        if version is not None and version not in PROTOCOLS:
-            self.why = "protocol-version"  # the server's word for the refusal, never the client's text
-            return self.send(400, {"error": "unsupported MCP-Protocol-Version", "supported": list(PROTOCOLS)})
         try:
             message = json.loads(raw)
         except ValueError:
@@ -228,6 +224,18 @@ class Handler(BaseHTTPRequestHandler):
             self.why = "batch"
             return self.send(400, {"jsonrpc": "2.0", "id": None,
                                    "error": {"code": -32600, "message": "one message per request"}})
+        # The version is agreed in `initialize`: a client may name one this server does not know
+        # there, in the header and the body, and gets the newest one this server speaks. Only a
+        # request after that must carry a version both know.
+        version = self.headers.get("MCP-Protocol-Version")
+        opening = isinstance(message, dict) and message.get("method") == "initialize"
+        params = message.get("params") if opening else None
+        asked = params.get("protocolVersion") if isinstance(params, dict) else None
+        if opening and (version is not None and version not in PROTOCOLS or asked not in PROTOCOLS):
+            self.why = "protocol-negotiated"  # the server's words, never the client's text
+        elif not opening and version is not None and version not in PROTOCOLS:
+            self.why = "protocol-version"
+            return self.send(400, {"error": "unsupported MCP-Protocol-Version", "supported": list(PROTOCOLS)})
         reply = mcp.respond(message, self.server.environ, None)
         if reply is None:
             return self.send(202)

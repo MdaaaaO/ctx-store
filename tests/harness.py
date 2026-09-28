@@ -10,7 +10,7 @@ FIXTURE = os.path.join(ROOT, "tests", "fixtures", "store-v1")
 GOLDEN = os.path.join(ROOT, "tests", "golden")
 
 
-def ctx(*args, env=None, cwd=None, walk=False):
+def ctx(*args, env=None, cwd=None, walk=False, stdin=None):
     """Run ctx with a clean environment; returns (exit, stdout, stderr).
 
     The walk up is off unless a test asks for it, so a run that forgets its
@@ -24,7 +24,7 @@ def ctx(*args, env=None, cwd=None, walk=False):
         cwd=cwd or ROOT,
         capture_output=True,
         text=True,
-        stdin=subprocess.DEVNULL,
+        **({"stdin": subprocess.DEVNULL} if stdin is None else {"input": stdin}),
         timeout=30,
     )
     return done.returncode, done.stdout, done.stderr

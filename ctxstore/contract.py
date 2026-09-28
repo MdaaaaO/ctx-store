@@ -29,6 +29,7 @@ ERRORS = {
     "UNAUDITED_WRITE": (EXIT_VALIDATION, "doc changed with no audit row"),
     "LOCK_TIMEOUT": (EXIT_LOCK_TIMEOUT, "lock timeout"),
     "STORE_READONLY": (EXIT_READONLY, "store is read-only or unwritable"),
+    "STORE_NOT_NAMED": (EXIT_READONLY, "a write needs CTX_STORE or --store"),
 }
 
 
@@ -63,6 +64,29 @@ class CtxError(Exception):
                 "exit": self.exit_code,
             },
         }
+
+
+class Findings(CtxError):
+    """Several failures of one run (validate): (code, detail, doc) each. The
+    exit code and the envelope's error are the first one's."""
+
+    def __init__(self, found):
+        super().__init__(found[0][0], found[0][1])
+        self.found = found
+
+    def line(self):
+        return "\n".join(
+            CtxError(code, detail if detail == doc else f"{doc} {detail}").line()
+            for code, detail, doc in self.found
+        )
+
+    def envelope(self):
+        envelope = super().envelope()
+        envelope["error"]["findings"] = [
+            {"code": code, "detail": detail, "doc": doc, "message": ERRORS[code][1]}
+            for code, detail, doc in self.found
+        ]
+        return envelope
 
 
 def ok_envelope(verb, data):

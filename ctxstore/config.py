@@ -1,10 +1,12 @@
 """Configuration comes from the environment only; nothing is read from $HOME
 except the XDG cache directory."""
 import os
+import re
 
 from .contract import CtxError
 
 DEFAULT_LOCK_TIMEOUT = 10.0
+ACTOR = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 class Config:
@@ -14,8 +16,19 @@ class Config:
         self.cache_dir = _cache_dir(environ)
         self.scratch = environ.get("CTX_SCRATCH") or None
         self.git = environ.get("CTX_GIT", "") == "1"
+        self.actor = _actor(environ)
+        self.lock_mode = environ.get("CTX_LOCK_MODE") or None
+        if self.lock_mode not in (None, "flock", "mkdir"):
+            raise CtxError("USAGE", "CTX_LOCK_MODE")
         self.walk = environ.get("CTX_NO_WALK", "") != "1"
         self.source = "flag" if store_flag else "env" if self.stores else "walk"
+
+
+def _actor(environ):
+    name = environ.get("CTX_ACTOR") or environ.get("USER") or environ.get("LOGNAME") or "unknown"
+    if not ACTOR.match(name):
+        raise CtxError("USAGE", "CTX_ACTOR")
+    return name
 
 
 def _store_list(value):

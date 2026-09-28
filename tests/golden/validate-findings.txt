@@ -1,0 +1,9 @@
+SCHEMA_VIOLATION epics/broken heading Goal: schema violation
+SCHEMA_VIOLATION epics/broken status: schema violation
+SCHEMA_VIOLATION epics/broken tags: schema violation
+SCHEMA_VIOLATION epics/broken updated: schema violation
+SCHEMA_VIOLATION epics/broken section Remaining work: schema violation
+SCHEMA_VIOLATION epics/broken Session log line 2: schema violation
+SCHEMA_VIOLATION reference/nested frontmatter: schema violation
+SCHEMA_VIOLATION reference/no-frontmatter frontmatter: schema violation
+SCHEMA_VIOLATION reference/no-type type: schema violation

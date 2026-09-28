@@ -1,0 +1,8 @@
+{
+  "frontmatter": {
+    "title": {"required": true},
+    "status": {"enum": ["active", "reference"]},
+    "tags": {"kind": "list"},
+    "updated": {"kind": "date"}
+  }
+}

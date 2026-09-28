@@ -360,7 +360,7 @@ class Mcp(StoreCase):
     def test_doctor(self):
         reply, = self.talk(self.tool(1, "ctx_doctor"))
         self.assertFalse(reply["result"]["isError"])
-        self.assertIn(f"store: {os.path.realpath(self.store)} (from env)", reply["result"]["content"][0]["text"])
+        self.assertIn(f"store: {os.path.realpath(self.store)} (markdown, from env)", reply["result"]["content"][0]["text"])
 
     def test_failures_are_tool_results(self):
         replies = self.talk(

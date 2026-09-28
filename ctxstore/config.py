@@ -3,6 +3,7 @@ except the XDG cache directory."""
 import os
 import re
 
+from .backend import split_locators
 from .contract import CtxError
 
 DEFAULT_LOCK_TIMEOUT = 10.0
@@ -32,7 +33,7 @@ def _actor(environ):
 
 
 def _store_list(value):
-    return [part for part in value.split(os.pathsep) if part]
+    return split_locators(value)
 
 
 def _seconds(value):

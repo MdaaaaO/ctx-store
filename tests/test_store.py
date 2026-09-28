@@ -294,6 +294,8 @@ class Log(StoreCase):
         self.assertEqual(self.audit(), [])
 
     def test_generated(self):
+        self.fails(self.run_ctx("log", "INDEX", "--section", "Log", "x"), 3, "GENERATED INDEX: doc is generated")
+        self.fails(self.run_ctx("fm", "INDEX", "title", "x"), 3, "GENERATED INDEX: doc is generated")
         self.put("INDEX", "---\ntitle: I\ntype: reference\n---\n\n## Log\n")
         self.fails(self.run_ctx("log", "INDEX", "--section", "Log", "x"), 3, "GENERATED INDEX: doc is generated")
 
@@ -315,6 +317,7 @@ class Log(StoreCase):
         os.chmod(self.store, stat.S_IRUSR | stat.S_IXUSR)
         try:
             result = self.run_ctx("log", EPIC, "x")
+            self.assertEqual(self.run_ctx("log", EPIC, "--", "ghp_" + "a" * 36)[0], 5)
             self.assertEqual(self.run_ctx("brief", EPIC)[0], 0)
             self.assertEqual(self.run_ctx("validate")[0], 0)
         finally:

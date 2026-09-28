@@ -2,7 +2,7 @@
 (data for the envelope, text for a terminal)."""
 import re
 
-from . import frontmatter, fs, sections
+from . import clock, frontmatter, sections
 from .contract import CtxError, Findings
 from .store import DATE, TIMESTAMP, digest
 
@@ -14,7 +14,7 @@ TAIL = 5
 def _clock(now):
     """(timestamp, date) of this run: `--now` when given, the clock otherwise."""
     if now is None:
-        return fs.now_utc(), fs.today()
+        return clock.now_utc(), clock.today()
     if not TIMESTAMP.match(now):
         raise CtxError("USAGE", "--now")
     return now, now[:10]
@@ -39,7 +39,7 @@ def validate(store, params):
     audited, broken = store.audited() if changed else ({}, set())
     found, checked, adopted = [], 0, []
     for key in store.keys():
-        _, _, data = store.read(key)
+        data = store.read(key)
         if changed and digest(data) in audited.get(key, ()) and key not in broken:
             continue
         checked += 1
@@ -73,7 +73,7 @@ def log(store, params):
         if not DATE.match(params["date"]):
             raise CtxError("USAGE", "--date")
         date = params["date"]
-    doc = store.load(key)
+    doc = store.load(store.target(key))
     schema = store.types.get(store.type_of(doc) or "", {}).get("log", {})
     if schema.get("ledger") and "section" not in params:
         line = text
@@ -106,7 +106,7 @@ def fm(store, params):
     if not frontmatter.KEY.match(f"{field}: x"):
         raise CtxError("USAGE", field)
     now, date = _clock(params.get("now"))
-    doc = store.load(key)
+    doc = store.load(store.target(key))
     rules = store.types.get(store.type_of(doc) or "", {}).get("frontmatter", {})
     value = raw
     if rules.get(field, {}).get("kind") == "list" or isinstance(doc.fields.get(field), list):

@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-from . import __version__, doctor, fs, mcp, memory_tool, reads, spec, verbs, writes
+from . import __version__, backend, doctor, fs, mcp, memory_tool, reads, spec, verbs, writes
 from .config import Config
 from .contract import API, CtxError, dump, ok_envelope
 from .store import Store
@@ -157,11 +157,11 @@ def dispatch(verb, params, environ, store=None, now=None):
     if now:
         params = {**params, "now": now}
     config = Config(environ, store)
-    roots = fs.resolve_stores(config.stores, fs.cwd(), config.walk)
+    backends = backend.open_stores(config, fs.cwd())
     if verb == "doctor":
-        data = doctor.report(config, roots)
+        data = doctor.report(config, backends)
         return data, doctor.text(data)
-    stores = [Store(root, config, named=config.source != "walk") for root in roots]
+    stores = [Store(one, config, named=config.source != "walk") for one in backends]
     if verb in ("get", "find", "resolve"):
         return getattr(reads, verb)(stores, params, config)
     if verb in WRITES or verb == "view":

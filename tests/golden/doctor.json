@@ -13,7 +13,9 @@
     "store_source": "env",
     "stores": [
       {
+        "backend": "markdown",
         "filesystem": "<filesystem>",
+        "locator": "<store>",
         "lock_mode": "<lock>",
         "path": "<store>",
         "read_only": "<read-only>",

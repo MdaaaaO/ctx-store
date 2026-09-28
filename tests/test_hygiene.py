@@ -44,5 +44,19 @@ class Hygiene(unittest.TestCase):
                     self.assertNotEqual(node.func.id, "open", name)
 
 
+    def test_the_core_reaches_storage_through_the_backend_only(self):
+        """Store data is the backend's; `fs` is for the Markdown backend and
+        for files of a run that are not store data."""
+        allowed = {"fs.py", "markdown.py", "cli.py", "spec.py", "reads.py", "doctor.py", "__init__.py"}
+        for name, tree in _modules():
+            if name in allowed:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module is None:
+                    self.assertNotIn("fs", [alias.name for alias in node.names], name)
+                if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module == "fs":
+                    self.fail(name)
+
+
 if __name__ == "__main__":
     unittest.main()

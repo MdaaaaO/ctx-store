@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file. Generated b
 [conventional-release](https://github.com/MdaaaaO/conventional-release) from
 [Conventional Commits](https://www.conventionalcommits.org).
 
+## 0.3.0 (2026-09-28)
+
+
+### Features
+
+* **core:** add ctx init to make a store from consumer inputs (#51) ([#55](https://github.com/MdaaaaO/ctx-store/issues/55)) ([a029e7a](https://github.com/MdaaaaO/ctx-store/commit/a029e7a1ae3c653c9204ed44e8544c84f22535a9))
+
+
+### Bug Fixes
+
+* **mcp:** agree the protocol version in initialize (#48) ([#52](https://github.com/MdaaaaO/ctx-store/issues/52)) ([1e970b3](https://github.com/MdaaaaO/ctx-store/commit/1e970b3b52a9fd6265c1360f6b8fccaa6e8cb70a))
+* **core:** adopt a doc deleted outside ctx (#53) ([#54](https://github.com/MdaaaaO/ctx-store/issues/54)) ([69e9e1f](https://github.com/MdaaaaO/ctx-store/commit/69e9e1f23daff0a22cdaf8447d93a6df21e4ca37))
+
 ## 0.2.1 (2026-09-28)
 
 

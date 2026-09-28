@@ -12,10 +12,10 @@
 | ticket-to-doc | single-term | `EX-202` | 2 | rank 1 |
 | ticket-cited-elsewhere | ranking | `EX-101` | 3 | rank 1 |
 | initiative-reworded | variant | `checkout rollout` | 2 | rank 1 |
-| initiative-by-goal | multi-term | `new checkout every region` | 2 | rank 1 |
+| initiative-by-goal | multi-term | `new checkout every region` | 4 | rank 1 |
 | role-access | multi-term | `analyst billing write` | 1 | rank 1 |
 | repo-routing | multi-term | `shop-models channel labels` | 1 | rank 1 |
-| decision-in-meeting | multi-term | `fallback provider two weeks` | 1 | rank 1 |
+| decision-in-meeting | multi-term | `fallback provider two weeks` | 2 | rank 1 |
 | tag-exact | single-term | `payments` | 3 | rank 1 |
 | phrase-exact | single-term | `Known traps to check on every PR` | 1 | rank 1 |
 | prompt-paged | task-prompt | `We got paged again last night because the orders_daily load_orders task timed out, can you check whether this is a known issue and what we usually do about it` | 1 | rank 1 |

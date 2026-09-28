@@ -17,7 +17,7 @@ KEY, TITLE, TAGS, HEAD, FIELD, BODY = 5.0, 5.0, 3.0, 3.0, 1.0, 1.0
 PHRASE, TOGETHER = 4.0, 2.0
 EDGES = "\"'.,;:!?()[]{}<>"  # punctuation around a word; inside it, punctuation is the word's
 LONG = 4        # a query of this many terms is a task, not a lookup: most of its terms are enough
-COVERED = 0.5   # of the weight of a long query's terms a doc has to hold
+COVERED = 0.35  # of the weight of a long query's terms a doc has to hold; set from real prompts (#21)
 SUMMARY = 80   # characters of a row's summary
 SCORED = 300  # hits scored in full; past that, the order is key and frontmatter first, then key
 

@@ -378,7 +378,7 @@ characters), then `· § <section>` when one `##` section holds the terms.
 The query is terms: words, and phrases in double quotes; punctuation around
 a word is dropped. A doc is a hit when every term occurs in its key or its
 text. A query of four terms or more is read as a task, not a lookup: a doc
-that holds at least half of the query's weight is a hit too, listed behind the
+that holds at least 35 % of the query's weight is a hit too, listed behind the
 docs that hold every term, its row ending in `· <n> of <m> terms`. A term's
 weight is how few docs hold it; a word that no doc holds, or every doc, weighs
 nothing. Matching folds case, ignores a

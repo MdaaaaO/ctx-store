@@ -10,7 +10,7 @@ golden:
 	CTX_UPDATE_GOLDEN=1 $(PYTHON) -m unittest discover -s tests -t .
 
 ci: test
-	$(PYTHON) -m compileall -q ctxstore ctx
+	$(PYTHON) -m compileall -q ctxstore ctxserve ctx ctx-serve
 
 # Latency of the read verbs on a generated 3 000-doc store; prints the README's table.
 bench:

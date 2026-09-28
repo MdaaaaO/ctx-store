@@ -14,9 +14,10 @@ dynamic = ["version"]
 
 [project.scripts]
 ctx = "ctxstore.cli:main"
+ctx-serve = "ctxserve.server:main"
 
 [tool.setuptools]
-packages = ["ctxstore"]
+packages = ["ctxstore", "ctxserve"]
 
 [tool.setuptools.package-data]
 ctxstore = ["interface.md", "VERSION"]

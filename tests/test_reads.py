@@ -111,6 +111,21 @@ class Find(StoreCase):
         scores = [row["score"] for row in data["rows"]]
         self.assertEqual(scores, sorted(scores, reverse=True))
 
+    def test_a_rare_term_counts_for_more(self):
+        for number in range(12):
+            self.put(f"reference/c{number:02}", f"---\ntitle: Common {number}\ntype: reference\n---\n\ncommon word\n")
+        self.put("reference/by-common", "---\ntitle: About the common thing\ntype: reference\n---\n\nand a quokka\n")
+        self.put("reference/by-rare", "---\ntitle: About the quokka\ntype: reference\n---\n\nand a common thing\n")
+        data = json.loads(self.run_ctx("find", "common quokka", "--json")[1])["data"]
+        self.assertEqual([row["doc"] for row in data["rows"]], ["reference/by-rare", "reference/by-common"])
+        self.assertGreater(data["rows"][0]["score"], data["rows"][1]["score"])
+
+    def test_a_phrase_among_other_terms_is_rewarded(self):
+        self.put("reference/apart", "---\ntitle: A\ntype: reference\n---\n\nfailed dag, then twice the dag failed again\n")
+        self.put("reference/phrase", "---\ntitle: B\ntype: reference\n---\n\nthe dag failed twice\n")
+        data = json.loads(self.run_ctx("find", '"dag failed" twice', "--json")[1])["data"]
+        self.assertEqual([row["doc"] for row in data["rows"]], ["reference/phrase", "reference/apart"])
+
     def test_more_hits_than_are_scored(self):
         for number in range(340):
             self.put(f"reference/n{number:03}", f"---\ntitle: Note {number}\ntype: reference\n---\n\nneedle {number}\n")

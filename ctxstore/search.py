@@ -38,21 +38,39 @@ def holds(term, text, squeezed):
     return term in text or squeeze(term) in squeezed
 
 
-def may_hold(wanted, data):
-    """Whether the bytes of a doc can hold every term: a cheap test that lets
-    most docs go before they are decoded. `wanted` is `prepare(terms)`."""
+def held(found, wanted, key, data, holders):
+    """Whether the doc holds every term, in its key or in its bytes; adds the
+    doc to `holders` for each term it holds. ASCII terms are answered by the
+    bytes; another term has the text decoded. Called once per doc of the
+    store, so it does nothing it does not need."""
     lowered = data.lower()
-    squeezed = None
-    for plain, tight in wanted:
-        if plain is None:
-            continue  # not ASCII: only the decoded text can tell
-        if plain in lowered:
+    low = squeezed = text = tight = None
+    every = True
+    for index, term in enumerate(found):
+        plain, narrow = wanted[index]
+        if plain is not None and plain in lowered:
+            holders[index] += 1
             continue
-        if squeezed is None:
-            squeezed = lowered.replace(b"-", b"").replace(b"_", b"")
-        if tight not in squeezed:
-            return False
-    return True
+        if low is None:
+            low = key.lower()
+        there = term in low or squeeze(term) in squeeze(low)
+        if not there and plain is not None:
+            if squeezed is None:
+                squeezed = lowered.replace(b"-", b"").replace(b"_", b"")
+            there = narrow in squeezed
+        elif not there:
+            if text is None:
+                try:
+                    text = data.decode("utf-8").lower()
+                except UnicodeDecodeError:
+                    text = ""
+                tight = squeeze(text)
+            there = term in text or squeeze(term) in tight
+        if there:
+            holders[index] += 1
+        else:
+            every = False
+    return every
 
 
 def prepare(found):
@@ -77,18 +95,12 @@ def headings(body):
 
 
 class Hit:
-    """A doc that may be a hit. Its folded text is made when something asks
-    for it: a query of ASCII terms that the bytes already answered never
-    does, until the hit is shown."""
+    """A doc that holds every term. Its folded text is made when something
+    asks for it: ranking a query of one term never does."""
 
-    def __init__(self, key, doc, found, sure=False):
+    def __init__(self, key, doc):
         self.key, self.doc = key, doc
         self._text = self._squeezed = None
-        if sure:
-            self.present = [True] * len(found)
-        else:
-            low = key.lower()
-            self.present = [self.has(t) or holds(t, low, squeeze(low)) for t in found]
 
     @property
     def text(self):
@@ -155,12 +167,12 @@ def _cut(text, size):
     return text if len(text) <= size else text[: size - 1].rstrip() + "…"
 
 
-def rank(hits, found, query, total, all_hits=None):
+def rank(hits, found, query, total, holders):
     """The hits, best first: (score, hit). `total` is how many docs were
-    looked at; a term that few of them hold counts for more."""
-    counts = [max(sum(1 for hit in hits if hit.present[i]), all_hits or 0) for i in range(len(found))]
-    rarity = [1.0 + math.log(max(total, 1) / max(count, 1)) for count in counts]
-    phrase = " ".join(query.lower().split())
+    looked at and `holders`, per term, how many of them hold it: a term that
+    few docs hold counts for more."""
+    rarity = [1.0 + math.log(max(total, 1) / max(count, 1)) for count in holders]
+    phrase = " ".join(query.lower().replace('"', " ").split())
     scored = []
     for hit in hits:
         score = sum(weight * rare for weight, rare in zip(hit.weights(found), rarity))

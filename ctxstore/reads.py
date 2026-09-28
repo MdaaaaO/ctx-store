@@ -112,7 +112,7 @@ def find(stores, params, config):
     if not found and "type" not in params and "tag" not in params:
         raise CtxError("USAGE", "query")
     wanted, seen, total = search.prepare(found), set(), 0
-    ascii_only = all(term.isascii() for term in found)
+    holders = [0] * len(found)  # per term, the docs that hold it
     filtered = "type" in params or "tag" in params
     likely = []  # (coarse rank, key, prefix, store, data): docs whose bytes hold every term
     for number, store in enumerate(stores, 1):
@@ -123,11 +123,10 @@ def find(stores, params, config):
             seen.add(key)
             total += 1
             data = store.read(key, listed=True)
+            if not search.held(found, wanted, key, data, holders):
+                continue
             low = key.lower()
             in_key = [search.holds(term, low, search.squeeze(low)) for term in found]
-            if not all(in_key) and not search.may_hold(
-                    [pair for pair, there in zip(wanted, in_key) if not there], data):
-                continue
             if filtered:
                 fields = head_fields(data[:HEAD])
                 if fields is None:  # frontmatter longer than the head, or broken
@@ -152,17 +151,16 @@ def find(stores, params, config):
     likely.sort(key=lambda one: one[:2])
     hits, later = [], []
     for coarse, key, prefix, data in likely:
-        if ascii_only and len(hits) >= search.SCORED:
+        if len(hits) >= search.SCORED:
             later.append((key, prefix, data))
             continue
         try:
-            hit = search.Hit(key, Doc(key, data), found, sure=ascii_only)
+            hit = search.Hit(key, Doc(key, data))
         except CtxError:
             continue
-        if all(hit.present):
-            hit.prefix = prefix
-            hits.append(hit)
-    ranked = search.rank(hits, found, query, total, len(hits) + len(later))
+        hit.prefix = prefix
+        hits.append(hit)
+    ranked = search.rank(hits, found, query, total, holders)
     limit = None if params.get("out") == "auto" else _budget(params, 4096)
     lines, rows, used = [], [], 0
 
@@ -177,7 +175,7 @@ def find(stores, params, config):
             continue
         if score is None:  # past the scored ones: made into a row only when it is shown
             key, prefix, data = hit
-            hit = search.Hit(key, Doc(key, data), found, sure=True)
+            hit = search.Hit(key, Doc(key, data))
             hit.prefix = prefix
         section = hit.section(found)[0] if found else None
         doc = hit.doc

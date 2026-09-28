@@ -57,8 +57,9 @@ class Hygiene(unittest.TestCase):
 
     def test_the_core_reaches_storage_through_the_backend_only(self):
         """Store data is the backend's; `fs` is for the Markdown backend and
-        for files of a run that are not store data."""
-        allowed = {"fs.py", "markdown.py", "cli.py", "spec.py", "reads.py", "doctor.py", "__init__.py"}
+        for files of a run that are not store data; `init` (bootstrap.py)
+        makes a Markdown store before its backend can open it."""
+        allowed = {"fs.py", "markdown.py", "cli.py", "spec.py", "reads.py", "doctor.py", "bootstrap.py", "__init__.py"}
         for name, tree in _modules():
             if name in allowed:
                 continue

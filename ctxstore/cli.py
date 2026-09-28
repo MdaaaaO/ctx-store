@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-from . import __version__, backend, doctor, fs, mcp, memory_tool, reads, spec, upkeep, verbs, writes
+from . import __version__, backend, bootstrap, doctor, fs, mcp, memory_tool, reads, spec, upkeep, verbs, writes
 from .config import Config
 from .contract import API, CtxError, dump, ok_envelope
 from .store import Store
@@ -14,7 +14,7 @@ VERBS = (
     "view", "create", "str_replace", "insert", "delete", "rename",
     "log", "fm", "row", "new", "move",
     "brief", "find", "resolve", "get",
-    "validate", "doctor", "maintain", "touch", "migrate",
+    "validate", "doctor", "maintain", "touch", "migrate", "init",
 )
 
 # verb -> (positional parameters, options: name -> kind)
@@ -23,6 +23,7 @@ BUILT = {
     "validate": ((), {"changed": "flag", "adopt": "flag"}),
     "migrate": ((), {"check": "flag", "dry-run": "flag", "apply": "flag"}),
     "maintain": ((), {}),
+    "init": ((), {"settings": "text", "types": "text", "templates": "text", "replace": "flag"}),
     "log": (("doc", "text"), {"section": "text", "date": "text", "from": "file"}),
     "fm": (("doc", "field", "value"), {"from": "file"}),
     "touch": ((), {"session": "text", "working": "text"}),
@@ -41,6 +42,7 @@ BUILT = {
 }
 WRITES = ("create", "new", "str_replace", "insert", "delete", "rename", "move")
 READS = ("brief", "get", "find", "resolve", "validate")
+LOCAL = ("init",)  # the command line only: the paths it reads are the caller's machine's
 REQUIRED = {
     "log": ("doc", "text"), "fm": ("doc", "field", "value"), "touch": ("session",),
     "get": ("doc",), "resolve": ("key",),
@@ -159,6 +161,8 @@ def dispatch(verb, params, environ, store=None, now=None):
     if now:
         params = {**params, "now": now}
     config = Config(environ, store)
+    if verb == "init":
+        return bootstrap.init(config, params)  # its store need not exist yet
     backends = backend.open_stores(config, fs.cwd())
     if verb == "doctor":
         data = doctor.report(config, backends)

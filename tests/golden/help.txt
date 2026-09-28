@@ -9,7 +9,7 @@ usage: ctx [--json] [--store <path>] [--now <timestamp>] [--stdin] <verb> [argum
 Memory tool   view create str_replace insert delete rename
 Writes        log fm row new move
 Reads         brief find resolve get
-Maintenance   validate doctor maintain touch migrate
+Maintenance   validate doctor maintain touch migrate init
 
 Topics        exit-codes errors output environment stores backends markdown-backend
               docs selectors budgets payloads front-ends

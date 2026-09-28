@@ -11,7 +11,7 @@ usage: ctx [--json] [--store <path>] [--now <timestamp>] [--stdin] <verb> [argum
 Memory tool   view create str_replace insert delete rename
 Writes        log fm row new move
 Reads         brief find resolve get
-Maintenance   validate doctor maintain touch migrate
+Maintenance   validate doctor maintain touch migrate init
 
 Topics        exit-codes errors output environment stores backends markdown-backend
               docs selectors budgets payloads front-ends
@@ -144,6 +144,9 @@ A store root is a directory that holds `ctx-store.json`, the settings:
 
     {"schema_version": 1}
 
+`ctx init` makes one, with the settings, schemas and templates a consumer
+hands over (`ctx help init`).
+
 Without `CTX_STORE` or `--store`, ctx walks up from the working directory and
 takes the first directory that is a store root or holds a `.context/`
 directory that is one. A directory without the marker never matches.
@@ -234,7 +237,7 @@ validated, locked and audited whichever way it arrives.
 |---|---|
 | `ctx <verb>` | hooks, people, cron |
 | `ctx memory` | Anthropic's memory tool: the tool call's input as one JSON object on stdin (`{"command": "view", "path": "/memories/epics/sample.md"}`), the tool result on stdout. `/memories` is the store. Commands `view` `create` `str_replace` `insert` `delete` `rename` are the verbs of the same name |
-| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb, `ctx_<verb>`, its input the verb's parameters. A tool's description is the verb's help, followed by what differs over MCP: the names of the parameters the help shows in angle brackets, in order, and the options that are not offered. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's |
+| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb but `init`, `ctx_<verb>`, its input the verb's parameters. A tool's description is the verb's help, followed by what differs over MCP: the names of the parameters the help shows in angle brackets, in order, and the options that are not offered. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's |
 
 Claude Desktop, `claude_desktop_config.json`:
 
@@ -526,3 +529,41 @@ run changes nothing.
 
 Exit 0; 3 `MIGRATION_PENDING` (`--check`), `SCHEMA_VIOLATION` when a doc is
 not valid after its steps; otherwise as for `log`.
+
+### init
+
+ctx init --store <path> [--settings <file>] [--types <folder>] [--templates <folder>] [--replace]
+
+Make a Markdown store, or bring an existing one's settings, type schemas and
+templates to what a consumer hands over. The store is the one path of
+`--store` or `CTX_STORE` (or `markdown://<path>`); the directory and its
+parents are created. Another backend, or a list of stores, is `USAGE`; no
+store named is `STORE_NOT_NAMED`.
+
+- `--settings`: a JSON object of `generated`, `ignore`, `resolve` and
+  `maintain` (`ctx help stores`), and `schema_version` if given the current
+  one, 1. It becomes `ctx-store.json`. Without it a new store gets
+  `{"schema_version": 1}` and an existing one keeps its marker.
+- `--types`: a folder of `<type>.json` schemas, copied to `.ctx/types/`.
+- `--templates`: a folder of `<type>.md` scaffolds, copied to `.ctx/templates/`.
+
+A type name is lower-case letters, digits, `.`, `_` and `-`, the first a
+letter or digit; anything else in the folder is `USAGE <file>`. Every input
+is checked, as a store checks its marker and schemas when it opens, before
+anything is written: one that is not valid is `SCHEMA_VIOLATION <file>` (a
+settings key the store does not know: `SCHEMA_VIOLATION <key>`).
+
+A store file that holds the same content already is left alone (the marker:
+the same settings, however laid out), so a second run writes nothing. One
+that holds other content is `SCHEMA_VIOLATION <store file>`
+(`.ctx/types/epic.json`) and nothing is written, unless `--replace`: then it
+is overwritten. Files the run does not name are left alone.
+
+A new store's marker is written first, then the rest under the store lock.
+One audit row per file written, verb `init`, `doc` the store file;
+`validate --changed` passes over them. The result names each file `written`
+or `unchanged`; `--json` gives `store`, `written`, `unchanged`. Not offered
+over MCP.
+
+Exit 0; 1 `USAGE`; 3 `SCHEMA_VIOLATION`; 4 `LOCK_TIMEOUT`; 5
+`STORE_READONLY` (a directory it cannot write), `STORE_NOT_NAMED`.

@@ -251,6 +251,30 @@ class Find(StoreCase):
         with open(path) as handle:
             self.assertEqual(len(handle.read().splitlines()), 81)
 
+    def test_where(self):
+        self.put("epics/paused", self.text(EPIC).replace("status: active", "status: paused").replace(
+            "updated: 2026-01-07", "updated: 2026-03-01").replace("tags: [sample]", "tags: [sample, late]"))
+
+        def keys(*args):
+            return [line.split(" · ")[0] for line in self.run_ctx("find", *args)[1].split("\n")[1:] if line]
+        self.assertEqual(keys("--where", "status=active"), [EPIC, "reference/lock-modes", "sessions/alpha-rollout"])
+        self.assertEqual(keys("--where", "status=active,type=epic"), [EPIC])
+        self.assertEqual(keys("--where", "status = paused"), ["epics/paused"])
+        self.assertEqual(keys("--where", "tags=late"), ["epics/paused"])
+        self.assertEqual(keys("--where", "tags!=late", "--type", "epic"), [EPIC])
+        self.assertEqual(keys("--where", "updated>=2026-01-06,updated<=2026-02-01"), [EPIC])
+        self.assertEqual(keys("--where", "updated>=2026-02-01"), ["epics/paused"])
+        self.assertEqual(keys("--where", "epic=EX-2"), ["sessions/beta-docs"])
+        self.assertEqual(keys("--where", "heartbeat>=2026-01-07T00:00:00Z,status!=ended"),
+                         ["sessions/alpha-rollout", "sessions/beta-docs"])
+        self.assertEqual(keys("region", "--where", "status=active"), [EPIC, "sessions/alpha-rollout"])
+        self.assertEqual(keys("--where", "owner=nobody"), [])
+        self.assertEqual(len(keys("--where", "owner!=nobody")), 7)
+        self.assertEqual(keys("--where", "title=Sample rollout"), ["epics/paused", EPIC])
+        for bad in ("status", "=active", "status==", "status==active", "status!==x", "status>==x", "status>active",
+                    "a=b,,c=d", ""):
+            self.fails(self.run_ctx("find", "--where", bad), 1, "USAGE --where: bad command line")
+
     def test_usage(self):
         self.fails(self.run_ctx("find"), 1, "USAGE query: bad command line")
 

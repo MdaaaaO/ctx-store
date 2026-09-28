@@ -146,11 +146,14 @@ def find(stores, params, config):
     made into rows."""
     query = params.get("query", "")
     found = search.terms(query)
-    if not found and "type" not in params and "tag" not in params:
+    wanted_fields = search.conditions(params["where"]) if "where" in params else []
+    if wanted_fields is None:
+        raise CtxError("USAGE", "--where")
+    if not found and "type" not in params and "tag" not in params and not wanted_fields:
         raise CtxError("USAGE", "query")
     wanted, seen, total = search.prepare(found), set(), 0
     holders = [0] * len(found)  # per term, the docs that hold it
-    filtered = "type" in params or "tag" in params
+    filtered = "type" in params or "tag" in params or bool(wanted_fields)
     long = len(found) >= search.LONG
     likely = []  # [coarse rank, key, prefix, data, mask]: docs that hold every term, or enough of them
     for number, store in enumerate(stores, 1):
@@ -177,6 +180,8 @@ def find(stores, params, config):
                     continue
                 tags = fields.get("tags")
                 if "tag" in params and params["tag"] not in (tags if isinstance(tags, list) else [tags]):
+                    continue
+                if not search.meets(fields, wanted_fields):
                     continue
             elif head_fields(data[:HEAD]) is None:
                 try:

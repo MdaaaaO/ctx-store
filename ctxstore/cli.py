@@ -28,7 +28,7 @@ BUILT = {
     "touch": ((), {"session": "text", "working": "text"}),
     "brief": (("doc",), {"registry": "flag", "session": "text", "links": "flag", "budget": "int", "full": "flag"}),
     "get": (("doc",), {"section": "text", "tail": "int", "budget": "int", "full": "flag", "out": "text"}),
-    "find": (("query",), {"type": "text", "tag": "text", "budget": "int", "full": "flag", "out": "text"}),
+    "find": (("query",), {"type": "text", "tag": "text", "where": "text", "budget": "int", "full": "flag", "out": "text"}),
     "resolve": (("key",), {}),
     "view": (("doc",), {"range": "text", "budget": "int", "full": "flag"}),
     "create": (("doc", "text"), {"type": "text", "title": "text", "from": "file"}),

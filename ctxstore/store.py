@@ -343,7 +343,7 @@ def _check_schema(name, schema):
         raise CtxError("SCHEMA_VIOLATION", where)
     for number, step in enumerate(steps, 1):
         shapes = {"rename_fields": dict, "set_fields": dict, "rename_sections": dict, "remove_fields": list,
-                  "replace_comments": list, "log_order": str}
+                  "replace_comments": list, "log_order": str, "log_order_from": str}
         if not isinstance(step, dict) or step.get("to") != number or set(step) - STEP_KEYS:
             raise CtxError("SCHEMA_VIOLATION", where)
         if any(not isinstance(step[key], shape) for key, shape in shapes.items() if key in step):

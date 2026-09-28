@@ -105,6 +105,8 @@ class Versions(UpkeepCase):
                       {"version": 1, "migrations": [{"to": 1, "log_order_from": "newest-first"}]},
                       {"version": 1, "migrations": [{"to": 1, "log_order": "oldest-first",
                                                      "log_order_from": "oldest-first"}]},
+                      {"version": 1, "migrations": [{"to": 1, "log_order": "oldest-first",
+                                                     "log_order_from": ["newest-first"]}]},
                       {"version": 1, "migrations": [{"to": 1, "replace_comments": [{"old": "", "new": "x"}]}]},
                       {"version": 1, "migrations": [{"to": 1, "rename_fields": ["a"]}]}, {"version": "1"}):
             self.schema("epic", rules)

@@ -348,7 +348,7 @@ ctx move <doc> <new>
 
 ### brief
 
-ctx brief <doc> [--links] | --registry | --session <id> [--budget <bytes>] [--full]
+ctx brief <doc> [--links] [--near] | --registry | --session <id> [--budget <bytes>] [--full]
 
 The cold-start read, within a byte budget (default 4096; above 8192 needs
 `--full`). What does not fit is replaced by one line that says how much is
@@ -358,6 +358,10 @@ missing.
   entries of its log.
   With `--links`, also the docs it links to and the docs that link to it
   (relative markdown links and wikilinks). That reads every doc of the store.
+  With `--near`, one line for each of those docs: `→` for a doc it links
+  to, `←` for a doc that links to it, then `key · title · updated ·
+  summary`. The doc and what is around it, inside the one budget. It
+  reads every doc of the store too, with or without `--links`.
 - `--registry`: one line per session that has not ended: name, status, epic,
   what it is working on, heartbeat.
 - `--session <id>`: that session's doc, as for `<doc>`, then its body.

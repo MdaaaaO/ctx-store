@@ -53,7 +53,7 @@ def validate(store, params):
     if changed:
         present = set(store.keys())
         for key in sorted(audited):
-            if key not in present and not store.generated(key):
+            if key not in present and key not in store.removed and not store.generated(key):
                 found.append(("UNAUDITED_WRITE", key, key))
     if found:
         raise Findings(found)
@@ -152,26 +152,26 @@ def touch(store, params):
 
 # --- brief ------------------------------------------------------------------
 
-def _budget(params):
-    budget = params.get("budget", BUDGET)
+def _budget(params, default=BUDGET):
+    budget = params.get("budget", default)
     if budget < 1:
         raise CtxError("USAGE", "--budget")
     return budget if params.get("full") else min(budget, FULL)
 
 
-def _fit(lines, budget):
+def _fit(lines, budget, what="lines"):
     """The lines that fit the byte budget, a marker line when some do not."""
     kept, used = [], 0
     for index, line in enumerate(lines):
         size = len(line.encode("utf-8")) + 1
-        marker = f"… {len(lines) - index} more lines, raise --budget".encode("utf-8")
+        marker = f"… {len(lines) - index} more {what}, raise --budget".encode("utf-8")
         if used + size + (len(marker) + 1 if index < len(lines) - 1 else 0) > budget:
             rest = len(lines) - index
-            note = f"… {rest} more lines, raise --budget"
+            note = f"… {rest} more {what}, raise --budget"
             while kept and used + len(note.encode("utf-8")) + 1 > budget:
                 used -= len(kept.pop().encode("utf-8")) + 1
                 rest += 1
-                note = f"… {rest} more lines, raise --budget"
+                note = f"… {rest} more {what}, raise --budget"
             return kept + [note], True
         kept.append(line)
         used += size

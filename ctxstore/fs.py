@@ -153,7 +153,23 @@ def marker(root):
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             raise CtxError("SCHEMA_VIOLATION", MARKER)
         config[key] = value
+    resolve = data.get("resolve", {})
+    if not isinstance(resolve, dict):
+        raise CtxError("SCHEMA_VIOLATION", MARKER)
+    config["resolve"] = resolve
     return config
+
+
+def write_scratch(folder, name, data):
+    """A payload file in the scratch directory (`--out auto`); returns its path."""
+    path = os.path.join(folder, name)
+    try:
+        os.makedirs(folder, exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.write(data)
+    except OSError:
+        raise CtxError("USAGE", "CTX_SCRATCH") from None
+    return path
 
 
 def types(root):
@@ -335,6 +351,42 @@ def write_atomic(path, data):
         if os.path.exists(temp):
             os.unlink(temp)
     with open(path, "rb") as handle:
+        return handle.read()
+
+
+def folder(root, key):
+    """The key of a directory below the root ('' for the root itself), or
+    None when `key` does not name one."""
+    if key in ("", ".", "/"):
+        return ""
+    if "\0" in key or os.path.isabs(key):
+        return None
+    path = os.path.realpath(os.path.join(root, key))
+    if not os.path.isdir(path) or os.path.commonpath([root, path]) != root:
+        return None
+    inside = os.path.relpath(path, root)
+    if any(part.startswith(".") for part in inside.split(os.sep)):
+        return None
+    return inside.replace(os.sep, "/")
+
+
+def remove(path):
+    try:
+        os.unlink(path)
+    except PermissionError:
+        raise CtxError("STORE_READONLY", path) from None
+
+
+def is_dir(path):
+    return os.path.isdir(path)
+
+
+def template(root, name):
+    """The scaffold of a doc type: `.ctx/templates/<type>.md`, or None."""
+    path = os.path.join(root, ".ctx", "templates", name + ".md")
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
         return handle.read()
 
 

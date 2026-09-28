@@ -1,1 +1,1 @@
-{"schema_version": 1, "generated": ["INDEX.md"], "ignore": ["README.md"]}
+{"schema_version": 1, "generated": ["INDEX.md"], "ignore": ["README.md"], "resolve": {"key_regex": "EX-[0-9]+", "fields": ["epic"], "section": "Tracker & links"}}

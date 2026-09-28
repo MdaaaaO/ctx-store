@@ -1,0 +1,2 @@
+1 hits
+reference/lock-modes · Lock modes · 2026-01-05 · `flock` on local filesystems, the `mkdir` lock where flock cannot be proven.

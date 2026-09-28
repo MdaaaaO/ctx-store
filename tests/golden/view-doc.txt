@@ -1,0 +1,23 @@
+ 1  ---
+ 2  title: Sample rollout
+ 3  type: epic
+ 4  status: active
+ 5  tags: [sample]
+ 6  updated: 2026-01-07
+ 7  ---
+ 8  
+ 9  # Sample rollout
+10  
+11  ## Tracker & links
+12  - Tracking issue: EX-1
+13  
+14  ## Goal
+15  Roll the sample service out to every region.
+16  
+17  ## Remaining work
+18  - Region three.
+19  
+20  ## Session log
+21  - 2026-01-05 — created.
+22  - 2026-01-06 — region one done.
+23  - 2026-01-07 — region two done.

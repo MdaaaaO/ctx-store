@@ -36,5 +36,15 @@ Every call a harness hook needs is one line. A write names its store; a read may
 | After a compaction | `ctx brief --session <id>` |
 | A step landed | `ctx log <doc> "<what happened>"` |
 
-**Status:** P1: `validate`, `log`, `fm`, `touch`, `brief` and `doctor` are built, the other verbs are specified. Design and phasing:
+## Claude Desktop
+
+```json
+{"mcpServers": {"ctx": {"command": "/path/to/ctx-store/ctx", "args": ["mcp"],
+  "env": {"CTX_STORE": "/path/to/store", "CTX_ACTOR": "desktop"}}}}
+```
+
+Every built verb is a tool (`ctx_brief`, `ctx_find`, `ctx_log`, …). `ctx memory` takes the input of
+Anthropic's memory tool on stdin.
+
+**Status:** P2: every verb except `maintain`, `migrate` and `row` is built. Design and phasing:
 [#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: MIT.

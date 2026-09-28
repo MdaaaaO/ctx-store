@@ -20,6 +20,8 @@ ERRORS = {
     "NO_STORE": (EXIT_NOT_FOUND, "no store found"),
     "NO_SUCH_DOC": (EXIT_NOT_FOUND, "no such doc"),
     "NO_SUCH_SECTION": (EXIT_NOT_FOUND, "no such section"),
+    "NO_MATCH": (EXIT_NOT_FOUND, "text not found in the doc"),
+    "DOC_EXISTS": (EXIT_VALIDATION, "doc exists"),
     "AMBIGUOUS_SELECTOR": (EXIT_VALIDATION, "selector matches more than one target"),
     "SCHEMA_VIOLATION": (EXIT_VALIDATION, "schema violation"),
     "SECRET_DETECTED": (EXIT_VALIDATION, "payload looks like a secret"),

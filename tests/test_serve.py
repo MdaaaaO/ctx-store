@@ -236,7 +236,19 @@ class Bearer(ServeCase):
         self.assertEqual(self.call("POST", "/mcp", "not json", {"Authorization": f"Bearer {TOKEN}"})[0], 400)
         self.assertEqual(self.rpc([{"jsonrpc": "2.0", "id": 1, "method": "ping"}])[0], 400)
         self.assertEqual(self.rpc({"jsonrpc": "2.0", "id": 1, "method": "ping"}, **{"MCP-Protocol-Version": "1999-01-01"})[0], 400)
-        self.assertEqual(self.rpc({"jsonrpc": "2.0", "id": 1, "method": "ping"}, **{"MCP-Protocol-Version": "2025-06-18"})[0], 200)
+        for version in ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"):
+            self.assertEqual(self.rpc({"jsonrpc": "2.0", "id": 1, "method": "ping"}, **{"MCP-Protocol-Version": version})[0], 200)
+        status, _, reply = self.rpc({"jsonrpc": "2.0", "id": 7, "method": "initialize",
+                                     "params": {"protocolVersion": "2025-11-25", "capabilities": {}}},
+                                    **{"MCP-Protocol-Version": "2025-11-25"})
+        self.assertEqual((status, reply["result"]["protocolVersion"]), (200, "2025-11-25"))
+        import io
+        self.server.log = io.StringIO()
+        self.rpc({"jsonrpc": "2.0", "id": 1, "method": "ping"}, **{"MCP-Protocol-Version": "1999-01-01"})
+        self.call("POST", "/mcp", "not json", {"Authorization": f"Bearer {TOKEN}"})
+        self.rpc({"jsonrpc": "2.0", "id": 1, "method": "ping"})
+        self.assertEqual(self.server.log.getvalue().splitlines(), [
+            "127.0.0.1 POST /mcp 400 protocol-version", "127.0.0.1 POST /mcp 400 not-json", "127.0.0.1 POST /mcp 200"])
         # a body over the limit is refused on its headers; the server never reads it
         for length, status in (("1048577", b"413"), ("-1", b"411"), ("many", b"411")):
             with socket.create_connection(("127.0.0.1", self.port), timeout=10) as link:

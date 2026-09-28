@@ -54,6 +54,7 @@ printed on stdout.
 | `UNAUDITED_WRITE` | 3 | doc changed with no audit row | the doc key |
 | `LOCK_TIMEOUT` | 4 | lock timeout | the lock |
 | `STORE_READONLY` | 5 | store is read-only or unwritable | the store path |
+| `GIT_FAILED` | 5 | version control refused the commit | the git command that failed |
 | `STORE_NOT_NAMED` | 5 | a write needs CTX_STORE or --store | — |
 
 `validate` may report several failures: one line each on stderr, the doc
@@ -192,7 +193,9 @@ A doc of a versioned type carries `schema_version: <type>.v<n>`; without the
 field it is at version 0. `new`, `create --type`, `fm` and `migrate` write the
 field. A doc behind its type is `MIGRATION_PENDING`: `validate` reports it
 and a write to it fails, until `migrate --apply` has run. A doc ahead of its
-type is `SCHEMA_VIOLATION schema_version`.
+type, or with a stamp that is not its type's, is `SCHEMA_VIOLATION
+schema_version`, for `validate` and for every write; `fm <doc>
+schema_version <stamp>` is the one write that may correct it.
 
 A schema that cannot be applied (not an object, a key of the wrong shape, a
 `grammar` that is not a regular expression) fails every verb on the store

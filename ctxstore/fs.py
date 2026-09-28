@@ -401,32 +401,36 @@ def audit_archive(root, actor):
     return True
 
 
-def _git(root, *args, env=None):
-    return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, env=env, timeout=60)
+def _git(root, *args, env=None, quiet=False):
+    """One git command in the store. A command that cannot run, runs out of
+    time or fails is GIT_FAILED; `quiet` returns None instead."""
+    try:
+        done = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, env=env, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        done = None
+    if done is None or done.returncode != 0:
+        if quiet:
+            return None
+        raise CtxError("GIT_FAILED", args[0])
+    return done.stdout.strip()
 
 
 def git_commit(root, actor, message, debounce, now):
     """Commit the store's changes, unless ctx committed less than `debounce`
     seconds ago. None when the store is in no work tree or nothing changed."""
-    try:
-        inside = _git(root, "rev-parse", "--is-inside-work-tree")
-    except (OSError, subprocess.SubprocessError):
+    if _git(root, "rev-parse", "--is-inside-work-tree", quiet=True) != "true":
         return None
-    if inside.returncode != 0 or inside.stdout.strip() != "true":
+    if not _git(root, "status", "--porcelain", "--", "."):
         return None
-    if not _git(root, "status", "--porcelain", "--", ".").stdout.strip():
-        return None
-    last = _git(root, "log", "-1", "--format=%ct", "--grep", "^ctx: ", "--", ".").stdout.strip()
+    last = _git(root, "log", "-1", "--format=%ct", "--grep", "^ctx: ", "--", ".", quiet=True) or ""
     if last.isdigit() and now - int(last) < debounce:
         return None
     environ = {**os.environ, "GIT_AUTHOR_NAME": actor, "GIT_AUTHOR_EMAIL": f"{actor}@ctx.invalid",
                "GIT_COMMITTER_NAME": actor, "GIT_COMMITTER_EMAIL": f"{actor}@ctx.invalid",
                "GIT_AUTHOR_DATE": f"{now} +0000", "GIT_COMMITTER_DATE": f"{now} +0000"}
     _git(root, "add", "-A", "--", ".")
-    done = _git(root, "commit", "-q", "--no-verify", "-m", f"ctx: {message}", "--", ".", env=environ)
-    if done.returncode != 0:
-        raise CtxError("STORE_READONLY", root)
-    return "committed: " + _git(root, "rev-parse", "--short", "HEAD").stdout.strip()
+    _git(root, "commit", "-q", "--no-verify", "-m", f"ctx: {message}", "--", ".", env=environ)
+    return "committed: " + _git(root, "rev-parse", "--short", "HEAD")
 
 
 def audit_rows(root):

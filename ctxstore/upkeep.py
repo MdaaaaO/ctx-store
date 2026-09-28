@@ -130,6 +130,8 @@ def _archive_logs(store, rules, config, now, date, report):
         def extend(current, moved=moved, key=key):
             if current is None:
                 current = f"---\ntitle: Log of {key}\ntype: log\nupdated: {date}\n---\n\n# Log of {key}\n\n## Log\n"
+                if store.stamp("log"):
+                    current = frontmatter.set_field(current, "schema_version", store.stamp("log"))
             body = frontmatter.split(current)[1]
             for line in moved:
                 body = sections.append_line(body, "Log", line)

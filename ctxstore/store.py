@@ -181,7 +181,7 @@ class Store:
 
     # --- the write path ---
 
-    def write(self, verb, key, change, payload="", now=None, actor=None, check=True):
+    def write(self, verb, key, change, payload="", now=None, actor=None, check=True, versioned=True):
         """lock → change → validate → secret scan → temp + rename → re-read and
         checksum → audit row. `change` maps the current text (None: no doc) to
         the new text. Returns the audit row."""
@@ -194,7 +194,7 @@ class Store:
             raise CtxError("STORE_READONLY", self.locator)
         secrets.scan(payload)
         with self.locked():
-            return self.apply(verb, key, change, now, actor, check)
+            return self.apply(verb, key, change, now, actor, check, versioned)
 
     def locked(self):
         """The store lock, for a write that touches more than one doc."""
@@ -204,7 +204,7 @@ class Store:
             raise CtxError("STORE_READONLY", self.locator)
         return self.backend.lock()
 
-    def apply(self, verb, key, change, now=None, actor=None, check=True):
+    def apply(self, verb, key, change, now=None, actor=None, check=True, versioned=True):
         """One doc's write, under a lock the caller holds. `change` returning
         None removes the doc."""
         key = self.key(key)
@@ -214,8 +214,8 @@ class Store:
         before = self.backend.read(key) if self.backend.exists(key) else None
         if before is not None:
             self._owner_check(key, before, actor)
-            if verb != "migrate":
-                self._behind_check(key, before)
+            if versioned:
+                self._version_check(key, before, verb)
         text = change(None if before is None else decode(before))
         if text is None:
             if before is None:
@@ -258,16 +258,21 @@ class Store:
             row = self.backend.audit_append(self.config.actor, row)
         return row
 
-    def _behind_check(self, key, data):
+    def _version_check(self, key, data, verb):
         """A doc behind its type takes its migration steps before any other
-        write: a write that stamped the new version would skip them."""
+        write: a write that stamped the new version would skip them. A stamp
+        that is ahead of the type, or not a stamp, is not written over."""
         try:
             doc = Doc(key, data)
         except CtxError:
             return
         name = self.type_of(doc)
-        at = self.version_of(doc, name) if name else None
-        if at is not None and at < self.types.get(name, {}).get("version", 0):
+        if name not in self.types:
+            return
+        at, version = self.version_of(doc, name), self.types[name].get("version", 0)
+        if at is None or at > version:
+            raise CtxError("SCHEMA_VIOLATION", "schema_version")
+        if at < version and verb != "migrate":
             raise CtxError("MIGRATION_PENDING", key)
 
     def _owner_check(self, key, data, actor):

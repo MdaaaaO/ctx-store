@@ -126,7 +126,7 @@ def fm(store, params):
         if stamp and field != "schema_version":
             text = frontmatter.set_field(text, "schema_version", stamp)
         return text
-    row = store.write("fm", key, change, payload=raw, now=now)
+    row = store.write("fm", key, change, payload=raw, now=now, versioned=field != "schema_version")
     return {"doc": row["doc"], "field": field, "value": value, "after": row["after"]}, f"set: {row['doc']} {field}"
 
 

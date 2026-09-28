@@ -81,6 +81,23 @@ class Versions(UpkeepCase):
                           for line in self.text("reference/lock-modes").split("\n")))
             self.fails(self.run_ctx("validate"), 3, "SCHEMA_VIOLATION reference/lock-modes schema_version: schema violation")
 
+    def test_a_wrong_stamp_is_not_written_over(self):
+        self.schema("reference", {"version": 1, "migrations": [{"to": 1}]})
+        wrong = self.text("reference/lock-modes").replace("type: reference\n", "type: reference\nschema_version: reference.v7\n")
+        self.put("reference/lock-modes", wrong)
+        self.put("reference/links", "---\ntitle: L\ntype: reference\nschema_version: reference.v1\n---\n\n[[lock-modes]]\n")
+        for verb in (("fm", "reference/lock-modes", "title", "x"), ("str_replace", "reference/lock-modes", "--old", "Lock", "--new", "x"),
+                     ("log", "reference/lock-modes", "--section", "Summary", "x"), ("delete", "reference/lock-modes"),
+                     ("rename", "reference/lock-modes", "reference/locks"), ("migrate", "--apply")):
+            result = self.run_ctx(*verb)
+            if verb[0] == "migrate":
+                self.assertEqual(result[0], 0)
+            else:
+                self.fails(result, 3, "SCHEMA_VIOLATION schema_version: schema violation")
+        self.assertEqual(self.text("reference/lock-modes"), wrong)
+        self.assertEqual(self.run_ctx("fm", "reference/lock-modes", "schema_version", "reference.v1")[0], 0)
+        self.assertEqual(self.run_ctx("validate")[0], 0)
+
     def test_a_broken_migration_list_is_one_error_line(self):
         for rules in ({"version": 2, "migrations": [{"to": 1}]}, {"version": 1, "migrations": [{"to": 2}]},
                       {"version": 1, "migrations": [{"to": 1, "rewrite_prose": True}]}, {"version": -1},
@@ -203,6 +220,14 @@ class Maintain(UpkeepCase):
                 self.assertEqual(self.run_ctx("maintain"), (0, "ok: nothing to do\n", ""))
                 self.assertEqual(self.run_ctx("validate")[0], 0)
 
+    def test_the_archive_doc_carries_its_types_version(self):
+        self.schema("log", {"version": 2, "migrations": [{"to": 1}, {"to": 2}], "sections": ["Log"]})
+        self.big_log()
+        self.assertEqual(self.run_ctx("maintain")[0], 0)
+        self.assertIn("schema_version: log.v2\n", self.text("archive/sample-rollout-log"))
+        self.assertEqual(self.run_ctx("validate")[0], 0)
+        self.assertEqual(self.run_ctx("maintain"), (0, "ok: nothing to do\n", ""))
+
     def test_a_second_tail_is_appended(self):
         self.big_log()
         self.run_ctx("maintain")
@@ -290,6 +315,19 @@ class Git(UpkeepCase):
         self.assertEqual(self.git("rev-list", "--count", "HEAD").strip(), "2")
         self.assertRegex(ctx("--now", "2026-01-08T09:36:00Z", "maintain", env=self.env)[1], r"^committed: ")
         self.assertEqual(self.git("rev-list", "--count", "HEAD").strip(), "3")
+
+    def test_a_git_failure_is_one_error_line(self):
+        self.assertEqual(self.run_ctx("log", EPIC, "one")[0], 0)
+        hook = os.path.join(self.store, ".git", "index.lock")
+        with open(hook, "w") as handle:
+            handle.write("held")
+        self.fails(self.run_ctx("maintain"), 5, "GIT_FAILED add: version control refused the commit")
+        os.unlink(hook)
+        self.assertRegex(self.run_ctx("maintain")[1], r"^committed: ")
+
+    def test_no_git_program(self):
+        self.assertEqual(self.run_ctx("log", EPIC, "one")[0], 0)
+        self.assertEqual(self.run_ctx("maintain", PATH="/nonexistent"), (0, "ok: nothing to do\n", ""))
 
     def test_off_by_default_and_outside_a_work_tree(self):
         self.assertEqual(self.run_ctx("log", EPIC, "one")[0], 0)

@@ -8,6 +8,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CTX = os.path.join(ROOT, "ctx")
 FIXTURE = os.path.join(ROOT, "tests", "fixtures", "store-v1")
 GOLDEN = os.path.join(ROOT, "tests", "golden")
+with open(os.path.join(ROOT, "ctxstore", "VERSION"), encoding="utf-8") as _handle:
+    VERSION = _handle.read().strip()  # a release changes this file and nothing in the tests
 
 
 def ctx(*args, env=None, cwd=None, walk=False, stdin=None):
@@ -45,6 +47,7 @@ def doctor_stable(stdout):
     envelope = json.loads(stdout)
     data = envelope["data"]
     data["python"] = "<python>"
+    data["version"] = "<version>"
     for store in data["stores"]:
         store["path"] = "<store>"
         store["locator"] = "<store>"

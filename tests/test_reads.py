@@ -3,7 +3,7 @@ import json
 import os
 import shutil
 
-from tests.harness import FIXTURE, ctx, golden
+from tests.harness import FIXTURE, VERSION, ctx, golden
 from tests.test_store import EPIC, NOW, StoreCase
 
 LINKS = (
@@ -534,7 +534,7 @@ class Mcp(StoreCase):
             self.request(2, "tools/list"))
         self.assertEqual(hello, {"jsonrpc": "2.0", "id": 1, "result": {
             "protocolVersion": "2025-03-26", "capabilities": {"tools": {}},
-            "serverInfo": {"name": "ctx", "version": "0.1.0"}}})
+            "serverInfo": {"name": "ctx", "version": VERSION}}})
         self.assertEqual(pong, {"jsonrpc": "2.0", "id": "p", "result": {}})
         tools = {tool["name"]: tool for tool in listing["result"]["tools"]}
         self.assertEqual(sorted(tools), sorted(

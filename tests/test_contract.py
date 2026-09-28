@@ -4,19 +4,19 @@ import unittest
 from ctxstore import spec
 from ctxstore.cli import VERBS
 from ctxstore.contract import ERRORS
-from tests.harness import ctx, golden
+from tests.harness import VERSION, ctx, golden
 
 
 class Contract(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(ctx("--version"), (0, "ctx 0.1.0 (api 1)\n", ""))
+        self.assertEqual(ctx("--version"), (0, f"ctx {VERSION} (api 1)\n", ""))
 
     def test_version_json(self):
         code, out, _ = ctx("--version", "--json")
         self.assertEqual(code, 0)
         self.assertEqual(
             json.loads(out),
-            {"api": 1, "ok": True, "verb": "version", "data": {"version": "0.1.0"}},
+            {"api": 1, "ok": True, "verb": "version", "data": {"version": VERSION}},
         )
 
     def test_help_golden(self):

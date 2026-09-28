@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file. Generated b
 [conventional-release](https://github.com/MdaaaaO/conventional-release) from
 [Conventional Commits](https://www.conventionalcommits.org).
 
+## 0.2.1 (2026-09-28)
+
+
+### Bug Fixes
+
+* **mcp:** accept the consent form as a browser posts it (#44) ([#45](https://github.com/MdaaaaO/ctx-store/issues/45)) ([b607472](https://github.com/MdaaaaO/ctx-store/commit/b6074726c6a716a14702cb8adb1280f7677ed2c8))
+* **mcp:** let the browser follow the redirect after consent (#46) ([#47](https://github.com/MdaaaaO/ctx-store/issues/47)) ([6a118ff](https://github.com/MdaaaaO/ctx-store/commit/6a118ff41ed08aca3ce59d926de5c096158f0318))
+* **mcp:** accept protocol 2025-11-25, say why a 400 (#48) ([#49](https://github.com/MdaaaaO/ctx-store/issues/49)) ([1fab5f7](https://github.com/MdaaaaO/ctx-store/commit/1fab5f74487340c4761a501325262128626535f3))
+
 ## 0.2.0 (2026-09-28)
 
 

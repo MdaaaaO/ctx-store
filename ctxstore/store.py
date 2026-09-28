@@ -7,6 +7,8 @@ from . import clock, frontmatter, secrets, sections
 from .contract import CtxError
 
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+VERSION = re.compile(r"^(.+)\.v(\d+)$")
+STEP_KEYS = {"to", "rename_fields", "set_fields", "remove_fields", "rename_sections", "log_order", "replace_comments"}
 TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
@@ -87,6 +89,23 @@ class Store:
                 return name
         return None
 
+    def version_of(self, doc, name):
+        """The schema version a doc is at: the `n` of `schema_version:
+        <type>.v<n>`, 0 without the field, None when the field is not that."""
+        stamp = doc.fields.get("schema_version")
+        if stamp in (None, ""):
+            return 0
+        match = VERSION.match(stamp) if isinstance(stamp, str) else None
+        if not match or match.group(1) != name:
+            return None
+        return int(match.group(2))
+
+    def stamp(self, name):
+        """The `schema_version` a doc of the type carries now, or None for a
+        type without versions."""
+        version = self.types.get(name, {}).get("version", 0)
+        return f"{name}.v{version}" if version else None
+
     def of_type(self, name):
         found = []
         for key in self.keys():
@@ -115,6 +134,11 @@ class Store:
         schema = self.types.get(name)
         if schema is None:
             return found
+        behind = self.version_of(doc, name)
+        if behind is None or behind > schema.get("version", 0):
+            return found + [("SCHEMA_VIOLATION", "schema_version")]
+        if behind < schema.get("version", 0):
+            return found + [("MIGRATION_PENDING", key)]
         for field, rule in schema.get("frontmatter", {}).items():
             problem = _field_problem(doc.fields.get(field), rule)
             if problem:
@@ -157,7 +181,7 @@ class Store:
 
     # --- the write path ---
 
-    def write(self, verb, key, change, payload="", now=None, actor=None, check=True):
+    def write(self, verb, key, change, payload="", now=None, actor=None, check=True, versioned=True):
         """lock → change → validate → secret scan → temp + rename → re-read and
         checksum → audit row. `change` maps the current text (None: no doc) to
         the new text. Returns the audit row."""
@@ -170,7 +194,7 @@ class Store:
             raise CtxError("STORE_READONLY", self.locator)
         secrets.scan(payload)
         with self.locked():
-            return self.apply(verb, key, change, now, actor, check)
+            return self.apply(verb, key, change, now, actor, check, versioned)
 
     def locked(self):
         """The store lock, for a write that touches more than one doc."""
@@ -180,7 +204,7 @@ class Store:
             raise CtxError("STORE_READONLY", self.locator)
         return self.backend.lock()
 
-    def apply(self, verb, key, change, now=None, actor=None, check=True):
+    def apply(self, verb, key, change, now=None, actor=None, check=True, versioned=True):
         """One doc's write, under a lock the caller holds. `change` returning
         None removes the doc."""
         key = self.key(key)
@@ -190,6 +214,8 @@ class Store:
         before = self.backend.read(key) if self.backend.exists(key) else None
         if before is not None:
             self._owner_check(key, before, actor)
+            if versioned:
+                self._version_check(key, before, verb)
         text = change(None if before is None else decode(before))
         if text is None:
             if before is None:
@@ -232,6 +258,23 @@ class Store:
             row = self.backend.audit_append(self.config.actor, row)
         return row
 
+    def _version_check(self, key, data, verb):
+        """A doc behind its type takes its migration steps before any other
+        write: a write that stamped the new version would skip them. A stamp
+        that is ahead of the type, or not a stamp, is not written over."""
+        try:
+            doc = Doc(key, data)
+        except CtxError:
+            return
+        name = self.type_of(doc)
+        if name not in self.types:
+            return
+        at, version = self.version_of(doc, name), self.types[name].get("version", 0)
+        if at is None or at > version:
+            raise CtxError("SCHEMA_VIOLATION", "schema_version")
+        if at < version and verb != "migrate":
+            raise CtxError("MIGRATION_PENDING", key)
+
     def _owner_check(self, key, data, actor):
         try:
             doc = Doc(key, data)
@@ -264,6 +307,24 @@ def _check_schema(name, schema):
     if not all(isinstance(rule, dict) for rule in schema.get("frontmatter", {}).values()):
         raise CtxError("SCHEMA_VIOLATION", where)
     if not all(isinstance(item, str) for item in schema.get("paths", []) + schema.get("sections", [])):
+        raise CtxError("SCHEMA_VIOLATION", where)
+    version, steps = schema.get("version", 0), schema.get("migrations", [])
+    if type(version) is not int or version < 0 or not isinstance(steps, list):
+        raise CtxError("SCHEMA_VIOLATION", where)
+    for number, step in enumerate(steps, 1):
+        shapes = {"rename_fields": dict, "set_fields": dict, "rename_sections": dict, "remove_fields": list,
+                  "replace_comments": list, "log_order": str}
+        if not isinstance(step, dict) or step.get("to") != number or set(step) - STEP_KEYS:
+            raise CtxError("SCHEMA_VIOLATION", where)
+        if any(not isinstance(step[key], shape) for key, shape in shapes.items() if key in step):
+            raise CtxError("SCHEMA_VIOLATION", where)
+        if step.get("log_order", "oldest-first") not in ("oldest-first", "newest-first"):
+            raise CtxError("SCHEMA_VIOLATION", where)
+        pairs = step.get("replace_comments", [])
+        if not all(isinstance(p, dict) and isinstance(p.get("old"), str) and p["old"]
+                   and isinstance(p.get("new"), str) for p in pairs):
+            raise CtxError("SCHEMA_VIOLATION", where)
+    if len(steps) != version:
         raise CtxError("SCHEMA_VIOLATION", where)
     log = schema.get("log", {})
     if log.get("order", "oldest-first") not in ("oldest-first", "newest-first"):

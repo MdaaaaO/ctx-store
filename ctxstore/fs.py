@@ -3,6 +3,7 @@ for the files of a run that are not store data (payloads, scratch, the spec)."""
 import json
 import os
 import signal
+import subprocess
 import threading
 import time
 
@@ -381,19 +382,77 @@ def audit_append(root, actor, row):
     return row
 
 
+def audit_archive(root, actor):
+    source = os.path.join(root, ".audit", f"{actor}.jsonl")
+    if not os.path.isfile(source):
+        return False
+    folder = os.path.join(root, ".audit", "archive")
+    os.makedirs(folder, exist_ok=True)
+    target = os.path.join(folder, f"{actor}.jsonl")
+    with open(source, "rb") as handle:
+        rows = handle.read()
+    sink = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+    try:
+        os.write(sink, rows)
+        os.fsync(sink)
+    finally:
+        os.close(sink)
+    os.unlink(source)
+    return True
+
+
+def _git(root, *args, env=None, quiet=False):
+    """One git command in the store. A command that cannot run, runs out of
+    time or fails is GIT_FAILED; `quiet` returns None instead."""
+    try:
+        done = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, env=env, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        done = None
+    if done is None or done.returncode != 0:
+        if quiet:
+            return None
+        raise CtxError("GIT_FAILED", args[0])
+    return done.stdout.strip()
+
+
+def git_commit(root, actor, message, debounce, now):
+    """Commit the store's changes, unless ctx committed less than `debounce`
+    seconds ago. None when the store is in no work tree or nothing changed."""
+    if _git(root, "rev-parse", "--is-inside-work-tree", quiet=True) != "true":
+        return None
+    if not _git(root, "status", "--porcelain", "--", "."):
+        return None
+    last = _git(root, "log", "-1", "--format=%ct", "--grep", "^ctx: ", "--", ".", quiet=True) or ""
+    if last.isdigit() and now - int(last) < debounce:
+        return None
+    environ = {**os.environ, "GIT_AUTHOR_NAME": actor, "GIT_AUTHOR_EMAIL": f"{actor}@ctx.invalid",
+               "GIT_COMMITTER_NAME": actor, "GIT_COMMITTER_EMAIL": f"{actor}@ctx.invalid",
+               "GIT_AUTHOR_DATE": f"{now} +0000", "GIT_COMMITTER_DATE": f"{now} +0000"}
+    _git(root, "add", "-A", "--", ".")
+    _git(root, "commit", "-q", "--no-verify", "-m", f"ctx: {message}", "--", ".", env=environ)
+    return "committed: " + _git(root, "rev-parse", "--short", "HEAD")
+
+
 def audit_rows(root):
-    """Every audit row, in file order per actor; a broken line is skipped."""
-    folder = os.path.join(root, ".audit")
+    """Every audit row, in file order per actor, the archived ones included; a
+    broken line is skipped."""
     rows = []
-    if os.path.isdir(folder):
-        for name in sorted(os.listdir(folder)):
-            if name.endswith(".jsonl"):
-                with open(os.path.join(folder, name), encoding="utf-8", errors="replace") as handle:
-                    for line in handle:
-                        try:
-                            row = json.loads(line)
-                        except ValueError:
-                            continue
-                        if isinstance(row, dict):
-                            rows.append(row)
+    for folder in (os.path.join(root, ".audit", "archive"), os.path.join(root, ".audit")):
+        if os.path.isdir(folder):
+            for name in sorted(os.listdir(folder)):
+                if name.endswith(".jsonl"):
+                    rows += _rows(os.path.join(folder, name))
+    return rows
+
+
+def _rows(path):
+    rows = []
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict):
+                rows.append(row)
     return rows

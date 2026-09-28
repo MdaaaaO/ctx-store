@@ -334,7 +334,7 @@ class Mcp(StoreCase):
         tools = {tool["name"]: tool for tool in listing["result"]["tools"]}
         self.assertEqual(sorted(tools), sorted(
             "ctx_" + verb for verb in ("view create str_replace insert delete rename log fm new move brief find "
-                                       "resolve get validate touch doctor").split()))
+                                       "resolve get validate touch doctor migrate maintain").split()))
         self.assertEqual(tools["ctx_log"]["inputSchema"], {
             "type": "object", "additionalProperties": False, "required": ["doc", "text"],
             "properties": {"doc": {"type": "string"}, "text": {"type": "string"}, "section": {"type": "string"},
@@ -381,7 +381,7 @@ class Mcp(StoreCase):
             self.request(1, "tools/call", name="rm", arguments={}),
             self.request(2, "resources/list"),
             {"id": 3, "method": "ping"},
-            self.request(4, "tools/call", name="ctx_maintain", arguments={}))
+            self.request(4, "tools/call", name="ctx_row", arguments={}))
         self.assertEqual([reply["error"]["code"] for reply in replies], [-32700, -32602, -32601, -32600, -32602])
         self.assertEqual([reply["id"] for reply in replies], [None, 1, 2, None, 4])
 

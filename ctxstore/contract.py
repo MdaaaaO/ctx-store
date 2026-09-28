@@ -28,9 +28,11 @@ ERRORS = {
     "PATH_ESCAPE": (EXIT_VALIDATION, "path leaves the store"),
     "NOT_OWNER": (EXIT_VALIDATION, "doc is owned by another actor"),
     "GENERATED": (EXIT_VALIDATION, "doc is generated"),
+    "MIGRATION_PENDING": (EXIT_VALIDATION, "doc is behind its type's schema version"),
     "UNAUDITED_WRITE": (EXIT_VALIDATION, "doc changed with no audit row"),
     "LOCK_TIMEOUT": (EXIT_LOCK_TIMEOUT, "lock timeout"),
     "STORE_READONLY": (EXIT_READONLY, "store is read-only or unwritable"),
+    "GIT_FAILED": (EXIT_READONLY, "version control refused the commit"),
     "STORE_NOT_NAMED": (EXIT_READONLY, "a write needs CTX_STORE or --store"),
 }
 

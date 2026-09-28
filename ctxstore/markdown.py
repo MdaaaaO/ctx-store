@@ -80,3 +80,9 @@ class MarkdownBackend(Backend):
 
     def audit_rows(self):
         return fs.audit_rows(self.root)
+
+    def audit_archive(self, actor):
+        return fs.audit_archive(self.root, actor)
+
+    def commit(self, actor, message, debounce, now):
+        return fs.git_commit(self.root, actor, message, debounce, now)

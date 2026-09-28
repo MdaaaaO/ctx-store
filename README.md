@@ -41,6 +41,8 @@ Every call a harness hook needs is one line. A write names its store; a read may
 | Session start | `ctx brief --registry` |
 | After a compaction | `ctx brief --session <id>` |
 | A step landed | `ctx log <doc> "<what happened>"` |
+| Session end, or on a timer | `ctx maintain` |
+| CI, after a schema change | `ctx migrate --check` |
 
 ## Claude Desktop
 
@@ -52,5 +54,5 @@ Every call a harness hook needs is one line. A write names its store; a read may
 Every built verb is a tool (`ctx_brief`, `ctx_find`, `ctx_log`, …). `ctx memory` takes the input of
 Anthropic's memory tool on stdin.
 
-**Status:** P2: every verb except `maintain`, `migrate` and `row` is built. Design and phasing:
+**Status:** P3: every verb except `row` is built. Design and phasing:
 [#1](https://github.com/MdaaaaO/ctx-store/issues/1). Licence: MIT.

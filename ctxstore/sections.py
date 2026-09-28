@@ -5,6 +5,7 @@ import re
 from .contract import CtxError
 
 HEADING = re.compile(r"^(#{1,6}) +(.*?)\s*$")
+DATED = re.compile(r"^- (\d{4}-\d{2}-\d{2})\b")
 FENCE = re.compile(r"^(```|~~~)")
 
 
@@ -59,6 +60,48 @@ def span(body, name):
 def lines_of(body, name):
     start, end = span(body, name)
     return body.split("\n")[start:end]
+
+
+def rename(body, old, new):
+    """The body with the `##` heading `old` called `new`; unchanged without it."""
+    if old not in names(body) or new in names(body):
+        return body
+    lines = body.split("\n")
+    for index, level, text in headings(body):
+        if level == 2 and text == old:
+            lines[index] = "## " + new
+    return "\n".join(lines)
+
+
+def order_entries(body, name, order):
+    """The body with the entries of one section in `order`, judged by the
+    dates they start with. Entries that read the other way round are
+    reversed; entries already in order, or in no order, are left alone.
+    Blank lines and comments stay where they are."""
+    if name not in names(body) or name in duplicates(body):
+        return body
+    start, end = span(body, name)
+    lines = body.split("\n")
+    found = [start + number - 1 for number, _ in entries(lines[start:end])]
+    dates = [match.group(1) for match in (DATED.match(lines[index]) for index in found) if match]
+    wanted = sorted(dates, reverse=order == "newest-first")
+    if len(dates) != len(found) or dates == wanted or dates != wanted[::-1]:
+        return body
+    for index, line in zip(found, [lines[i] for i in reversed(found)]):
+        lines[index] = line
+    return "\n".join(lines)
+
+
+def replace_in_comments(body, old, new):
+    """The body with `old` replaced inside HTML comments only: prose is never
+    rewritten."""
+    out, comment = [], False
+    for line in body.split("\n"):
+        if comment or line.strip().startswith("<!--"):
+            comment = "-->" not in line
+            line = line.replace(old, new)
+        out.append(line)
+    return "\n".join(out)
 
 
 def entries(lines):

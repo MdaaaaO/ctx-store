@@ -1,0 +1,1 @@
+{"schema_version": 1, "resolve": {"key_regex": "EX-[0-9]+", "fields": ["epic"], "section": "Tracker & links"}}

@@ -12,7 +12,7 @@ import unittest
 import urllib.parse
 
 from ctxserve import auth as oauth
-from ctxserve.server import build
+from ctxserve.server import PROTOCOLS, build
 from tests.harness import FIXTURE
 
 SECRET = "correct horse battery staple"
@@ -243,6 +243,22 @@ class Bearer(ServeCase):
                                     **{"MCP-Protocol-Version": "2025-11-25"})
         self.assertEqual((status, reply["result"]["protocolVersion"]), (200, "2025-11-25"))
         import io
+        self.server.log = io.StringIO()
+        # `initialize` agrees the version: one this server does not know, in the header or the
+        # body, gets the newest one it speaks instead of a refusal (#48)
+        for header, body in (("2099-01-01", "2099-01-01"), ("2099-01-01", "2025-06-18"), (None, "2099-01-01"),
+                             (None, None), ("2025-11-25", "2025-11-25")):
+            params = {"capabilities": {}, **({"protocolVersion": body} if body else {})}
+            status, _, reply = self.rpc({"jsonrpc": "2.0", "id": 7, "method": "initialize", "params": params},
+                                        **({"MCP-Protocol-Version": header} if header else {}))
+            self.assertEqual((status, reply["result"]["protocolVersion"]),
+                             (200, body if body in PROTOCOLS else PROTOCOLS[0]), (header, body))
+        status, _, reply = self.rpc({"jsonrpc": "2.0", "id": 7, "method": "initialize", "params": ["x"]})
+        self.assertEqual((status, reply["result"]["protocolVersion"]), (200, PROTOCOLS[0]))
+        self.assertEqual(self.server.log.getvalue().splitlines(),
+                         ["127.0.0.1 POST /mcp 200 protocol-negotiated"] * 4 + ["127.0.0.1 POST /mcp 200"]
+                         + ["127.0.0.1 POST /mcp 200 protocol-negotiated"])
+        self.assertNotIn("2099", self.server.log.getvalue())
         self.server.log = io.StringIO()
         self.rpc({"jsonrpc": "2.0", "id": 1, "method": "ping"}, **{"MCP-Protocol-Version": "1999-01-01"})
         self.call("POST", "/mcp", "not json", {"Authorization": f"Bearer {TOKEN}"})

@@ -449,7 +449,8 @@ Check every doc against the general rules and the schema of its type.
 recorded, and reports each as `UNAUDITED_WRITE`: it changed outside ctx.
 `--changed --adopt` records the current state of every such doc that is
 valid instead (an audit row with the verb `adopt`), and reports only the
-invalid ones. `--adopt` is a write.
+invalid ones. A doc deleted outside ctx is adopted as deleted (`after`
+`null`). `--adopt` is a write.
 
 A doc larger than the store's `maintain.size_guard` (default 30000 bytes) is
 a warning, never a failure: `warning: SIZE_GUARD <doc>: <n> bytes` after the

@@ -107,6 +107,14 @@ class Validate(StoreCase):
         os.unlink(self.path("ledger"))
         self.fails(self.run_ctx("validate", "--changed"), 3,
                    "UNAUDITED_WRITE ledger: doc changed with no audit row")
+        # --adopt records the deletion (#53): an adopt row with no after, then nothing to report
+        self.assertEqual(self.run_ctx("validate", "--changed", "--adopt"),
+                         (0, "ok: 0 docs checked, 1 adopted\n", ""))
+        self.assertEqual({key: self.audit()[-1][key] for key in ("verb", "doc", "before", "after")},
+                         {"verb": "adopt", "doc": "ledger", "before": None, "after": None})
+        self.assertEqual(self.run_ctx("validate", "--changed"), (0, "ok: 0 docs checked\n", ""))
+        self.put("ledger", "by hand\n")  # back outside ctx: reported again
+        self.assertEqual(self.run_ctx("validate", "--changed")[0], 3)
 
     def test_adopt_keeps_an_invalid_doc_out(self):
         self.put("reference/no-type", "---\ntitle: No type\n---\n")

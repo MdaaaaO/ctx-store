@@ -76,11 +76,15 @@ jobs:
           pr=$prs
 
           runs=$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
-                   --jq '.check_runs[] | "\(.name)\t\(.status)\t\(.conclusion)"') \
+                   --jq '.check_runs[] | "\(.name)\t\(.status)\t\(.conclusion)\t\(.completed_at // "9999")"') \
             || skip "could not list the check runs"
           IFS=',' read -ra required <<< "$REQUIRED"
           for name in "${required[@]}"; do
-            line=$(awk -F'\t' -v n="$name" '$1 == n' <<< "$runs" | tail -1)
+            # One name can have several runs on a head: a job that other events also start, and that is
+            # skipped for them, leaves skipped runs beside the one that ran. The run that counts is the
+            # newest that was not skipped (one still running sorts last); only skipped runs means skipped.
+            line=$(awk -F'\t' -v n="$name" '$1 == n && $3 != "skipped"' <<< "$runs" | sort -t$'\t' -k4,4 | tail -1)
+            [ -n "$line" ] || line=$(awk -F'\t' -v n="$name" '$1 == n' <<< "$runs" | tail -1)
             [ -n "$line" ] || skip "check '$name' has not run on this head"
             status=$(cut -f2 <<< "$line"); conclusion=$(cut -f3 <<< "$line")
             [ "$status" = completed ] || skip "check '$name' is still $status"

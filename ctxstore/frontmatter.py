@@ -73,6 +73,24 @@ def one_line(key, value):
             raise CtxError("SCHEMA_VIOLATION", key)
 
 
+def rename_field(text, old, new):
+    """The doc with a field renamed in place; unchanged without the field."""
+    lines, body = split(text)
+    if new in parse(lines):
+        return text
+    for index, line in enumerate(lines):
+        match = KEY.match(line)
+        if match and match.group(1) == old:
+            lines[index] = new + line[len(old):]
+    return "\n".join([FENCE, *lines, FENCE]) + "\n" + body
+
+
+def remove_field(text, key):
+    lines, body = split(text)
+    kept = [line for line in lines if not (KEY.match(line) and KEY.match(line).group(1) == key)]
+    return "\n".join([FENCE, *kept, FENCE]) + "\n" + body
+
+
 def set_field(text, key, value):
     """The doc with one field set: its line replaced in place, or added as
     the last line of the frontmatter."""

@@ -6,6 +6,7 @@ from . import clock, frontmatter, sections
 from .contract import CtxError, Findings
 from .store import DATE, TIMESTAMP, digest
 
+SIZE_GUARD = 30000
 BUDGET = 4096
 FULL = 8192
 TAIL = 5
@@ -37,9 +38,12 @@ def validate(store, params):
         raise CtxError("STORE_NOT_NAMED")
     now, _ = _clock(params.get("now"))
     audited, broken = store.audited() if changed else ({}, set())
-    found, checked, adopted = [], 0, []
+    found, checked, adopted, warnings = [], 0, [], []
+    guard = store.marker.get("maintain", {}).get("size_guard", SIZE_GUARD)
     for key in store.keys():
         data = store.read(key)
+        if len(data) > guard:
+            warnings.append({"code": "SIZE_GUARD", "doc": key, "bytes": len(data)})
         if changed and digest(data) in audited.get(key, ()) and key not in broken:
             continue
         checked += 1
@@ -57,10 +61,12 @@ def validate(store, params):
                 found.append(("UNAUDITED_WRITE", key, key))
     if found:
         raise Findings(found)
-    data = {"checked": checked, "adopted": adopted}
+    data = {"checked": checked, "adopted": adopted, "warnings": warnings}
     text = f"ok: {checked} docs checked"
     if adopt:
         text += f", {len(adopted)} adopted"
+    for warning in warnings:
+        text += f"\nwarning: SIZE_GUARD {warning['doc']}: {warning['bytes']} bytes"
     return data, text
 
 
@@ -116,6 +122,9 @@ def fm(store, params):
         text = frontmatter.set_field(current, field, value)
         if "updated" in rules and field != "updated":
             text = frontmatter.set_field(text, "updated", date)
+        stamp = store.stamp(store.type_of(doc) or "")
+        if stamp and field != "schema_version":
+            text = frontmatter.set_field(text, "schema_version", stamp)
         return text
     row = store.write("fm", key, change, payload=raw, now=now)
     return {"doc": row["doc"], "field": field, "value": value, "after": row["after"]}, f"set: {row['doc']} {field}"

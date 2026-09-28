@@ -88,6 +88,17 @@ class Backend:
     def audit_rows(self):
         raise NotImplementedError
 
+    def audit_archive(self, actor):
+        """Put an actor's audit rows aside; they stay part of `audit_rows`.
+        Returns whether anything moved."""
+        return False
+
+    def commit(self, actor, message, debounce, now):
+        """Record the store's state in version control, at most once per
+        `debounce` seconds. Returns a line for the report, or None when the
+        backend has no such thing or there is nothing to record."""
+        return None
+
 
 def check_settings(data, where):
     """Settings as the core uses them, from what a backend has stored."""
@@ -102,9 +113,10 @@ def check_settings(data, where):
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             raise CtxError("SCHEMA_VIOLATION", where)
         settings[key] = value
-    settings["resolve"] = data.get("resolve", {})
-    if not isinstance(settings["resolve"], dict):
-        raise CtxError("SCHEMA_VIOLATION", where)
+    for key in ("resolve", "maintain"):
+        settings[key] = data.get(key, {})
+        if not isinstance(settings[key], dict):
+            raise CtxError("SCHEMA_VIOLATION", where)
     return settings
 
 

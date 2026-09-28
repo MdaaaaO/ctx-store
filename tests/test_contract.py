@@ -53,11 +53,11 @@ class Contract(unittest.TestCase):
         self.assertEqual(rows, ERRORS)
 
     def test_unbuilt_verb(self):
-        code, out, err = ctx("maintain")
+        code, out, err = ctx("row")
         self.assertEqual(code, 1)
         self.assertEqual(out, "")
         self.assertEqual(
-            err, "NOT_BUILT maintain: verb is specified but not built in this version\n"
+            err, "NOT_BUILT row: verb is specified but not built in this version\n"
         )
 
     def test_unknown_verb_and_option(self):

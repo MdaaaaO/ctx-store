@@ -14,4 +14,4 @@ Maintenance   validate doctor maintain touch migrate
 Topics        exit-codes errors output environment stores backends markdown-backend
               docs selectors budgets payloads front-ends
 
-Available in this version: every verb except maintain, migrate and row.
+Available in this version: every verb except row.

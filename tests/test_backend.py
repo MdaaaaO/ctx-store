@@ -52,6 +52,12 @@ SCRIPT = (
     ("delete", "notes/links"),
     ("validate", "--changed"),
     ("validate",),
+    ("migrate", "--check"),
+    ("migrate", "--dry-run"),
+    ("maintain",),
+    ("--now", "2026-03-01T00:00:00Z", "maintain"),
+    ("maintain",),
+    ("validate", "--changed"),
     ("--json", "brief", EPIC),
     ("--json", "log", "epics/none", "x"),
 )

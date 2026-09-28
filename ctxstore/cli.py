@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-from . import __version__, backend, doctor, fs, mcp, memory_tool, reads, spec, verbs, writes
+from . import __version__, backend, doctor, fs, mcp, memory_tool, reads, spec, upkeep, verbs, writes
 from .config import Config
 from .contract import API, CtxError, dump, ok_envelope
 from .store import Store
@@ -21,6 +21,8 @@ VERBS = (
 BUILT = {
     "doctor": ((), {}),
     "validate": ((), {"changed": "flag", "adopt": "flag"}),
+    "migrate": ((), {"check": "flag", "dry-run": "flag", "apply": "flag"}),
+    "maintain": ((), {}),
     "log": (("doc", "text"), {"section": "text", "date": "text", "from": "file"}),
     "fm": (("doc", "field", "value"), {"from": "file"}),
     "touch": ((), {"session": "text", "working": "text"}),
@@ -164,6 +166,8 @@ def dispatch(verb, params, environ, store=None, now=None):
     stores = [Store(one, config, named=config.source != "walk") for one in backends]
     if verb in ("get", "find", "resolve"):
         return getattr(reads, verb)(stores, params, config)
+    if verb in ("migrate", "maintain"):
+        return getattr(upkeep, verb)(stores[0], params, config)
     if verb in WRITES or verb == "view":
         return getattr(writes, verb)(_first(stores, verb, params), params)
     return getattr(verbs, verb)(_first(stores, verb, params), params)

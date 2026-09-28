@@ -3,6 +3,7 @@ remove docs. Every one goes through the store's write path."""
 import posixpath
 import re
 
+from . import frontmatter
 from .contract import CtxError
 from .store import decode
 from .verbs import _budget, _clock, _fit, _one_line
@@ -52,7 +53,9 @@ def _scaffold(store, name, key, title, date):
     if text is None:
         text = "---\ntitle: {{TITLE}}\ntype: {{TYPE}}\nupdated: {{DATE}}\n---\n\n# {{TITLE}}\n"
     values = {"TITLE": title, "TYPE": name, "DATE": date, "KEY": key, "SLUG": key.rsplit("/", 1)[-1]}
-    return re.sub(r"\{\{([A-Z]+)\}\}", lambda m: values.get(m.group(1), m.group(0)), text)
+    text = re.sub(r"\{\{([A-Z]+)\}\}", lambda m: values.get(m.group(1), m.group(0)), text)
+    stamp = store.stamp(name)
+    return frontmatter.set_field(text, "schema_version", stamp) if stamp else text
 
 
 def create(store, params):

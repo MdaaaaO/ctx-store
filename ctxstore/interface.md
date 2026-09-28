@@ -16,7 +16,7 @@ Maintenance   validate doctor maintain touch migrate
 Topics        exit-codes errors output environment stores backends markdown-backend
               docs selectors budgets payloads front-ends
 
-Available in this version: every verb except maintain, migrate and row.
+Available in this version: every verb except row.
 
 ## Exit codes
 
@@ -50,6 +50,7 @@ printed on stdout.
 | `PATH_ESCAPE` | 3 | path leaves the store | the path |
 | `NOT_OWNER` | 3 | doc is owned by another actor | the doc key |
 | `GENERATED` | 3 | doc is generated | the doc key |
+| `MIGRATION_PENDING` | 3 | doc is behind its type's schema version | the doc key |
 | `UNAUDITED_WRITE` | 3 | doc changed with no audit row | the doc key |
 | `LOCK_TIMEOUT` | 4 | lock timeout | the lock |
 | `STORE_READONLY` | 5 | store is read-only or unwritable | the store path |
@@ -80,7 +81,7 @@ The exit status and `error.code` are the first one's.
 | `CTX_LOCK_TIMEOUT` | `10` | Seconds a write waits for the lock before exit 4 |
 | `CTX_CACHE_DIR` | `$XDG_CACHE_HOME/ctx`, else `~/.cache/ctx` | Optional cache; never required, never created by a read |
 | `CTX_SCRATCH` | unset | Directory for temporary payload files |
-| `CTX_GIT` | unset | `1` turns on debounced git commits of the store |
+| `CTX_GIT` | unset | Markdown backend. `1` lets `maintain` commit the store's changes; never a commit per write |
 
 Nothing else is read from the environment (`USER` and `LOGNAME` name the
 actor when `CTX_ACTOR` is unset), and nothing from `$HOME` except the cache
@@ -118,6 +119,7 @@ Every store has settings, whatever the backend:
 | `generated` | Glob patterns over doc keys (`INDEX.md`): docs another tool writes. Not validated, not writable (`GENERATED`) |
 | `ignore` | Glob patterns: not docs. Every verb answers `NO_SUCH_DOC` for them |
 | `resolve` | `key_regex`, `fields`, `section` (`ctx help resolve`) |
+| `maintain` | `size_guard`, `keep_log`, `archive`, `session_days`, `session_archive`, `catalog`, `git_debounce` (`ctx help maintain`) |
 
 Every write leaves one audit row: `seq` (the store's write counter) `ts`
 `actor` `verb` `doc` `before` `after` (sha256 of the doc, `null` for none).
@@ -183,6 +185,14 @@ every key is optional:
 | `sections` | `##` headings every doc of the type has |
 | `log` | `section`: where `log` adds its entry; `order`: `oldest-first` (default, the entry goes last) or `newest-first` (the entry goes first); `grammar`: a regular expression every line of that section matches; `ledger: true`: `log` appends raw lines at the end of the doc |
 | `owner` | The field that names the doc's owner; a write by another actor fails with `NOT_OWNER` |
+| `version` | The type's schema version, a number; 0 or absent: the type has no versions |
+| `migrations` | One step per version, in order; step `n` takes a doc from version `n-1` to `n` (`ctx help migrate`) |
+
+A doc of a versioned type carries `schema_version: <type>.v<n>`; without the
+field it is at version 0. `new`, `create --type`, `fm` and `migrate` write the
+field. A doc behind its type is `MIGRATION_PENDING`: `validate` reports it
+and a write to it fails, until `migrate --apply` has run. A doc ahead of its
+type is `SCHEMA_VIOLATION schema_version`.
 
 A schema that cannot be applied (not an object, a key of the wrong shape, a
 `grammar` that is not a regular expression) fails every verb on the store
@@ -395,6 +405,10 @@ recorded, and reports each as `UNAUDITED_WRITE`: it changed outside ctx.
 valid instead (an audit row with the verb `adopt`), and reports only the
 invalid ones. `--adopt` is a write.
 
+A doc larger than the store's `maintain.size_guard` (default 30000 bytes) is
+a warning, never a failure: `warning: SIZE_GUARD <doc>: <n> bytes` after the
+result, `warnings` in the envelope.
+
 Exit 0 with the number of docs checked; 3 with one line per finding.
 
 ### doctor
@@ -415,7 +429,25 @@ Exit 0 with the report; 2 `NO_STORE`; 3 `SCHEMA_VIOLATION ctx-store.json`.
 
 ### maintain
 
-ctx maintain — the periodic maintenance pass. Not built yet (P3).
+ctx maintain
+
+The periodic pass, for an asynchronous hook, cron or the end of a session.
+A second run changes nothing.
+
+1. Log tails: a doc over `size_guard` bytes (default 30000) keeps the
+   `keep_log` newest entries of its log (default 20); the older ones move,
+   oldest first, to the doc `archive` names (default `archive/{slug}-log`).
+2. Sessions: a session doc with `status: ended` and a heartbeat older than
+   `session_days` (default 7) moves to `session_archive` (default
+   `sessions/archive/{name}`), links to it rewritten; its audit rows are put
+   aside and still count.
+3. Catalog: when `catalog` names a generated doc, it is rewritten as a table
+   of every doc (key, title, type, status, updated), only if it changed.
+4. With `CTX_GIT=1` on a store inside a git work tree: one commit of the
+   store's changes, author and committer the actor, unless ctx committed
+   less than `git_debounce` seconds ago (default 300).
+
+Exit codes as for `log`.
 
 ### touch
 
@@ -429,4 +461,24 @@ Exit 0; 2 `NO_SUCH_DOC`; 3 `AMBIGUOUS_SELECTOR`; otherwise as for `log`.
 
 ### migrate
 
-ctx migrate — move a store to the current schema version. Not built yet (P3).
+ctx migrate --check | --dry-run | --apply
+
+Take every doc that is behind its type's schema version to that version.
+
+A type's `migrations` are numbered steps. A step may hold `rename_fields`
+and `rename_sections` (old → new), `set_fields` (field → value),
+`remove_fields`, `log_order` (`oldest-first` or `newest-first`: a log whose
+dated entries read the other way round is reversed; one already in order, or
+in no order, is left alone) and `replace_comments` (`old`, `new`: replaced inside HTML
+comments only). Steps touch frontmatter, section names and the order of log
+entries; prose is never rewritten. A doc takes each step once, so a second
+run changes nothing.
+
+- `--check`: exit 3 `MIGRATION_PENDING`, one line per doc, when steps are
+  pending.
+- `--dry-run`: what `--apply` would do, per doc: versions, steps, lines
+  added or removed. Writes nothing.
+- `--apply`: one audited write per doc, validated at the new version.
+
+Exit 0; 3 `MIGRATION_PENDING` (`--check`), `SCHEMA_VIOLATION` when a doc is
+not valid after its steps; otherwise as for `log`.

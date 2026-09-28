@@ -220,6 +220,17 @@ class MemoryVerbs(StoreCase):
                          "moved: archive/old/locks → reference/lock-modes (1 docs relinked)\n")
         self.assertEqual(self.text("reference/links"), LINKS.replace("[[reference/lock-modes|", "[[reference/lock-modes|"))
 
+    def test_an_ignored_path_is_not_a_doc(self):
+        self.put("README", "---\ntitle: R\ntype: reference\n---\n\nhello\n")
+        before = self.text("README")
+        for verb in (("view", "README"), ("get", "README"), ("str_replace", "README", "--old", "hello", "--new", "x"),
+                     ("insert", "README", "--line", "0", "x"), ("delete", "README"), ("rename", "README", "notes/r"),
+                     ("create", "README", "--type", "reference"), ("new", "reference", "README")):
+            self.fails(self.run_ctx(*verb), 2, "NO_SUCH_DOC README: no such doc")
+        self.fails(self.run_ctx("rename", EPIC, "README"), 2, "NO_SUCH_DOC README: no such doc")
+        self.assertEqual(self.text("README"), before)
+        self.assertEqual(self.audit(), [])
+
     def test_rename_failures(self):
         before = sorted(name for _, _, files in os.walk(self.store) for name in files if name != "store.lock")
         self.fails(self.run_ctx("rename", EPIC, "reference/lock-modes"), 3, "DOC_EXISTS reference/lock-modes: doc exists")

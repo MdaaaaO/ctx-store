@@ -184,10 +184,22 @@ class Migrate(UpkeepCase):
                     self.put(key, self.text(key).replace("schema_version: epic.v2\n", ""))
 
     def test_a_doc_that_is_not_valid_after_its_steps_stops_the_run(self):
+        """The run names every doc that blocks it, as `validate` does, and
+        writes none: not even the docs ahead of it in key order."""
         self.put("epics/old-style", NEWEST_FIRST.replace("status: paused", "status: asleep"))
-        code, _, err = self.run_ctx("migrate", "--apply")
-        self.assertEqual((code, err), (3, "SCHEMA_VIOLATION state: schema violation\n"))
-        self.assertIn("status: asleep", self.text("epics/old-style"))
+        self.put("epics/two-bad", NEWEST_FIRST.replace("status: paused", "status: someday").replace("title: Old style\n", ""))
+        before = {key: self.text(key) for key in ("epics/half-way", "epics/old-style", "epics/two-bad", EPIC)}
+        self.fails(self.run_ctx("migrate", "--apply"), 3, "\n".join((
+            "SCHEMA_VIOLATION epics/old-style state: schema violation",
+            "SCHEMA_VIOLATION epics/two-bad title: schema violation",
+            "SCHEMA_VIOLATION epics/two-bad state: schema violation")))
+        code, out, _ = self.run_ctx("migrate", "--apply", "--json")
+        self.assertEqual(code, 3)
+        self.assertEqual([(f["code"], f["doc"], f["detail"]) for f in json.loads(out)["error"]["findings"]], [
+            ("SCHEMA_VIOLATION", "epics/old-style", "state"), ("SCHEMA_VIOLATION", "epics/two-bad", "title"),
+            ("SCHEMA_VIOLATION", "epics/two-bad", "state")])
+        self.assertEqual({key: self.text(key) for key in before}, before)
+        self.assertEqual(self.audit(), [])
 
     def test_usage_and_named_store(self):
         self.fails(self.run_ctx("migrate"), 1, "USAGE migrate: bad command line")

@@ -549,7 +549,10 @@ run changes nothing.
   pending.
 - `--dry-run`: what `--apply` would do, per doc: versions, steps, lines
   added or removed. Writes nothing.
-- `--apply`: one audited write per doc, validated at the new version.
+- `--apply`: one audited write per doc, validated at the new version. Every
+  doc is checked before any is written: when one would not be valid, the run
+  writes nothing and names each such doc, one line per finding, as `validate`
+  does (`SCHEMA_VIOLATION <doc> <detail>`; `--json` findings carry `doc`).
 
 Exit 0; 3 `MIGRATION_PENDING` (`--check`), `SCHEMA_VIOLATION` when a doc is
 not valid after its steps; otherwise as for `log`.

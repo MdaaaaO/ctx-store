@@ -188,7 +188,7 @@ every key is optional:
 | `paths` | Glob patterns: docs at these paths are of this type when they have no `type` field |
 | `frontmatter` | Field → rule: `required`, `kind` (`string` `list` `date` `timestamp`), `const`, `enum` |
 | `sections` | `##` headings every doc of the type has |
-| `log` | `section`: where `log` adds its entry; without it, `maintain` and `migrate`'s `log_order` use the body-level dated list instead (the `- <date> — …` lines after the `#` title and before the first `##`); `order`: `oldest-first` (default, the entry goes last) or `newest-first` (the entry goes first); `grammar`: a regular expression every line of that section matches; `ledger: true`: `log` appends raw lines at the end of the doc |
+| `log` | `section`: where `log` adds its entry; `log` rules without it make `maintain` and `migrate`'s `log_order` use the body-level dated list instead (the `- <date> — …` lines after the `#` title and before the first `##`); `order`: `oldest-first` (default, the entry goes last) or `newest-first` (the entry goes first); `grammar`: a regular expression every line of that section matches; `ledger: true`: `log` appends raw lines at the end of the doc |
 | `owner` | The field that names the doc's owner; a write by another actor fails with `NOT_OWNER` |
 | `version` | The type's schema version, a number; 0 or absent: the type has no versions |
 | `migrations` | One step per version, in order; step `n` takes a doc from version `n-1` to `n` (`ctx help migrate`) |
@@ -486,7 +486,8 @@ A second run changes nothing.
    the doc `archive` names (default `archive/{slug}-log`), which is created
    if it does not exist yet. The archive doc's own type (default `log`)
    decides the shape: with `log.section` the moved entries go into that
-   section, else into its body-level dated list; `log.order`
+   section; with `log` rules but no `section`, into its body-level dated
+   list; with no `log` rules, into a `## Log` section; `log.order`
    `newest-first` puts the moved block at the top, newest first,
    `oldest-first` (default) at the end, oldest first, as they are kept.
 2. Sessions: a session doc with `status: ended` and a heartbeat older than

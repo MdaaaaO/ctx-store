@@ -14,6 +14,7 @@ import binascii
 import json
 
 from . import __version__, spec
+from .config import ACTOR as ACTOR_NAME
 from .contract import CtxError
 
 MODERN = ("2026-07-28",)  # stateless: every request names its version in `_meta`
@@ -24,9 +25,12 @@ NAMED = {"tools/call": "name", "resources/read": "uri", "prompts/get": "name"}  
 SERVER = {"name": "ctx", "version": __version__}
 KINDS = {"text": "string", "int": "integer", "flag": "boolean"}
 HIDDEN = ("from", "out")  # files of the server's machine are not the client's
+READ_ONLY = ("doctor", "brief", "get", "find", "resolve", "view")  # no `actor`: they write nothing
+ACTOR = ("The optional `actor` writes as that actor instead of the server's; the store's settings "
+         "must allow the name (`mcp.actors`).")
 
 
-def describe(text, positional, options):
+def describe(text, positional, options, actor=False):
     """A verb's help as a tool's description. The help is written for the
     command line: what differs over MCP is said after it, so a model does
     not look for a parameter that the help names and the schema lacks."""
@@ -36,10 +40,14 @@ def describe(text, positional, options):
     hidden = [f"--{name}" for name in HIDDEN if name in options]
     if hidden:
         notes.append("Not offered over MCP: " + ", ".join(hidden) + " (files of the server's machine).")
+    if actor:
+        notes.append(ACTOR)
     return text + ("\n\nOver MCP. " + " ".join(notes) if notes else "")
 
 
-def tools():
+def tools(remote=False):
+    """The tool list. `remote` (the HTTP connector, one identity) offers no
+    `actor`."""
     from . import cli
     sections = spec.verbs()
     listed = []
@@ -51,9 +59,12 @@ def tools():
         for name, kind in options.items():
             if name not in HIDDEN:
                 properties[name] = {"type": KINDS[kind]}
+        offered = not remote and verb not in READ_ONLY
+        if offered:
+            properties["actor"] = {"type": "string"}
         listed.append({
             "name": f"ctx_{verb}",
-            "description": describe(sections[verb], positional, options),
+            "description": describe(sections[verb], positional, options, offered),
             "inputSchema": {
                 "type": "object",
                 "properties": properties,
@@ -64,7 +75,7 @@ def tools():
     return listed
 
 
-def call(params, environ, store):
+def call(params, environ, store, remote=False):
     from . import cli
     name = params.get("name") if isinstance(params, dict) else None
     verb = name[4:] if isinstance(name, str) and name.startswith("ctx_") else None
@@ -76,8 +87,13 @@ def call(params, environ, store):
     try:
         if any(key in HIDDEN for key in given):
             raise CtxError("USAGE", next(key for key in given if key in HIDDEN))
+        actor = given.get("actor")
+        if "actor" in given and (remote or verb in READ_ONLY or not isinstance(actor, str)
+                                 or not ACTOR_NAME.match(actor)):
+            raise CtxError("USAGE", "actor")
+        given = {key: value for key, value in given.items() if key != "actor"}
         checked = cli.required(verb, cli.typed(verb, given, files=False))
-        _, text = cli.dispatch(verb, checked, environ, store)
+        _, text = cli.dispatch(verb, checked, environ, store, actor=actor)
     except CtxError as failure:
         return {"content": [{"type": "text", "text": failure.line()}], "isError": True}
     return {"content": [{"type": "text", "text": text}], "isError": False}
@@ -127,9 +143,10 @@ def answer(message, environ, store, headers=None):
         modern = _era(message, headers)
     except Refused as refusal:
         return _error(ident, refusal.code, refusal.text, refusal.data), 400, refusal.why
+    remote = headers is not None  # the HTTP connector: one identity, so no `actor`
     if modern:
-        return _stateless(ident, method, message.get("params"), environ, store)
-    return _handshake(ident, method, message.get("params"), environ, store), 200, ""
+        return _stateless(ident, method, message.get("params"), environ, store, remote)
+    return _handshake(ident, method, message.get("params"), environ, store, remote), 200, ""
 
 
 def _era(message, headers):
@@ -189,17 +206,17 @@ def _unsupported(ident, version):
     return _error(ident, refusal.code, refusal.text, refusal.data)
 
 
-def _stateless(ident, method, params, environ, store):
+def _stateless(ident, method, params, environ, store, remote=False):
     """(reply, HTTP status, reason) of a 2026-07-28 request. Every result says
     it is complete and names this server; the tool list is not cached."""
     if method == "server/discover":
         result = {"supportedVersions": list(SUPPORTED), "capabilities": {"tools": {}},
                   "ttlMs": 0, "cacheScope": "private"}
     elif method == "tools/list":
-        result = {"tools": tools(), "ttlMs": 0, "cacheScope": "private"}
+        result = {"tools": tools(remote), "ttlMs": 0, "cacheScope": "private"}
     elif method == "tools/call":
         try:
-            result = call(params, environ, store)
+            result = call(params, environ, store, remote)
         except LookupError as failure:
             return _error(ident, -32602, str(failure)), 200, ""
     else:
@@ -207,15 +224,15 @@ def _stateless(ident, method, params, environ, store):
     return _result(ident, {**result, "resultType": "complete", "_meta": {META + "serverInfo": dict(SERVER)}}), 200, ""
 
 
-def _handshake(ident, method, params, environ, store):
+def _handshake(ident, method, params, environ, store, remote=False):
     """The reply to a request of the handshake revisions (2025-11-25 and before)."""
     if method == "ping":
         return _result(ident, {})
     if method == "tools/list":
-        return _result(ident, {"tools": tools()})
+        return _result(ident, {"tools": tools(remote)})
     if method == "tools/call":
         try:
-            return _result(ident, call(params, environ, store))
+            return _result(ident, call(params, environ, store, remote))
         except LookupError as failure:
             return _error(ident, -32602, str(failure))
     return _error(ident, -32601, f"method not found: {method}")

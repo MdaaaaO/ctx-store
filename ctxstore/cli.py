@@ -1,6 +1,7 @@
 """Command line front-end. No prompts, no colour, deterministic output."""
 import json
 import os
+import re
 import sys
 
 from . import __version__, backend, bootstrap, doctor, fs, mcp, memory_tool, reads, spec, upkeep, verbs, writes
@@ -156,8 +157,10 @@ def required(verb, params):
     return params
 
 
-def dispatch(verb, params, environ, store=None, now=None):
-    """Run one built verb; (data, text). Every front-end ends here."""
+def dispatch(verb, params, environ, store=None, now=None, actor=None):
+    """Run one built verb; (data, text). Every front-end ends here. `actor`
+    (MCP only) writes as that actor instead of `CTX_ACTOR`, where every store
+    opened allows the name."""
     if now:
         params = {**params, "now": now}
     config = Config(environ, store)
@@ -168,6 +171,12 @@ def dispatch(verb, params, environ, store=None, now=None):
         data = doctor.report(config, backends)
         return data, doctor.text(data)
     stores = [Store(one, config, named=config.source != "walk") for one in backends]
+    if actor is not None:
+        for one in stores:
+            allowed = one.marker["mcp"].get("actors")
+            if allowed is None or not re.fullmatch(allowed, actor):
+                raise CtxError("USAGE", "actor")
+        config.actor = actor
     if verb in ("get", "find", "resolve"):
         return getattr(reads, verb)(stores, params, config)
     if verb in ("migrate", "maintain"):

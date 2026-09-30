@@ -119,10 +119,16 @@ def check_settings(data, where):
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             raise CtxError("SCHEMA_VIOLATION", where)
         settings[key] = value
-    for key in ("resolve", "maintain"):
+    for key in ("resolve", "maintain", "mcp"):
         settings[key] = data.get(key, {})
         if not isinstance(settings[key], dict):
             raise CtxError("SCHEMA_VIOLATION", where)
+    actors = settings["mcp"].get("actors")
+    if actors is not None:
+        try:
+            re.compile(actors)
+        except (TypeError, re.error):
+            raise CtxError("SCHEMA_VIOLATION", where) from None
     return settings
 
 

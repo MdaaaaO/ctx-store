@@ -543,12 +543,15 @@ class Mcp(StoreCase):
         self.assertEqual(tools["ctx_log"]["inputSchema"], {
             "type": "object", "additionalProperties": False, "required": ["doc", "text"],
             "properties": {"doc": {"type": "string"}, "text": {"type": "string"}, "section": {"type": "string"},
-                           "date": {"type": "string"}}})
+                           "date": {"type": "string"}, "actor": {"type": "string"}}})
         self.assertTrue(tools["ctx_log"]["description"].startswith("ctx log <doc> <text>"))
         # the help is the command line's; what differs over MCP is said after it
         self.assertTrue(tools["ctx_log"]["description"].endswith(
             "Over MCP. Parameters named in angle brackets above are, in order: doc, text. "
-            "Not offered over MCP: --from (files of the server's machine)."))
+            "Not offered over MCP: --from (files of the server's machine). The optional `actor` writes as that "
+            "actor instead of the server's; the store's settings must allow the name (`mcp.actors`)."))
+        self.assertEqual([name for name, tool in sorted(tools.items()) if "actor" not in tool["inputSchema"]["properties"]],
+                         ["ctx_brief", "ctx_doctor", "ctx_find", "ctx_get", "ctx_resolve", "ctx_view"])
         self.assertTrue(tools["ctx_rename"]["description"].startswith("ctx rename <doc> <to>"))
         self.assertIn("in order: doc, to.", tools["ctx_rename"]["description"])
         self.assertNotIn("Over MCP", tools["ctx_doctor"]["description"])
@@ -643,6 +646,49 @@ class Mcp(StoreCase):
         # which has no `server/discover`
         self.assertEqual(sorted(legacy["result"]), ["tools"])
         self.assertEqual(plain["error"]["code"], -32601)
+
+    def allow(self, pattern):
+        path = os.path.join(self.store, "ctx-store.json")
+        with open(path) as handle:
+            data = json.load(handle)
+        data["mcp"] = {"actors": pattern}
+        with open(path, "w") as handle:
+            json.dump(data, handle)
+
+    def test_a_write_names_its_actor(self):
+        """One server for many sessions: each names itself, and the owner rule
+        and the audit trail follow the name, not the server's actor."""
+        self.allow("[a-z]+-[a-z]+")
+        own, foreign, unnamed = self.talk(
+            self.tool(1, "ctx_fm", doc="sessions/alpha-rollout", field="working_on", value="x", actor="alpha-rollout"),
+            self.tool(2, "ctx_fm", doc="sessions/alpha-rollout", field="working_on", value="y", actor="beta-docs"),
+            self.tool(3, "ctx_fm", doc="sessions/alpha-rollout", field="working_on", value="z"),
+            CTX_ACTOR="claude")
+        self.assertFalse(own["result"]["isError"])
+        self.assertEqual([reply["result"]["content"][0]["text"] for reply in (foreign, unnamed)],
+                         ["NOT_OWNER sessions/alpha-rollout: doc is owned by another actor"] * 2)
+        stateless, = self.talk(self.modern(4, "tools/call", name="ctx_fm", arguments={
+            "doc": "sessions/alpha-rollout", "field": "working_on", "value": "w", "actor": "alpha-rollout"}), CTX_ACTOR="claude")
+        self.assertFalse(stateless["result"]["isError"])
+        self.assertIn("working_on: w\n", self.text("sessions/alpha-rollout"))
+        self.assertEqual([(row["verb"], row["actor"]) for row in self.audit("alpha-rollout")], [("fm", "alpha-rollout")] * 2)
+        self.assertEqual(self.audit("claude") + self.audit("beta-docs"), [])
+
+    def test_an_actor_the_store_does_not_allow(self):
+        replies = self.talk(
+            self.tool(1, "ctx_log", doc=EPIC, text="x", actor="alpha-rollout"))
+        self.allow("[a-z]+-[a-z]+")
+        replies += self.talk(
+            self.tool(2, "ctx_log", doc=EPIC, text="x", actor="alpha"),  # the pattern must match all of it
+            self.tool(3, "ctx_log", doc=EPIC, text="x", actor="-bad-name"),
+            self.tool(4, "ctx_log", doc=EPIC, text="x", actor=7),
+            self.tool(5, "ctx_get", doc=EPIC, actor="alpha-rollout"))  # a read has no actor
+        self.assertEqual([reply["result"]["content"][0]["text"] for reply in replies],
+                         ["USAGE actor: bad command line"] * 5)
+        self.assertEqual(self.audit() + self.audit("alpha-rollout") + self.audit("alpha"), [])
+        self.allow("[")
+        reply, = self.talk(self.tool(6, "ctx_log", doc=EPIC, text="x"))
+        self.assertEqual(reply["result"]["content"][0]["text"], "SCHEMA_VIOLATION ctx-store.json: schema violation")
 
     def test_a_write_needs_a_named_store(self):
         code, out, _ = ctx("mcp", env={"CTX_ACTOR": "tester"}, cwd=self.store, walk=True,

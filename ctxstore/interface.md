@@ -77,7 +77,7 @@ The exit status and `error.code` are the first one's.
 |---|---|---|
 | `CTX_STORE` | walk up from the working directory | A store locator, or a list separated like `PATH`; `--store` overrides it (`ctx help stores`) |
 | `CTX_NO_WALK` | unset | Markdown backend. `1` turns the walk up off: without `CTX_STORE` or `--store` the result is `NO_STORE`. For tests, worktrees and temporary directories below a live store |
-| `CTX_ACTOR` | `$USER` | Who writes: the name of the audit file and of every row in it. 1 to 64 of letters, digits, `.`, `_`, `-`; the first a letter or digit |
+| `CTX_ACTOR` | `$USER` | Who writes: the name of the audit file and of every row in it. 1 to 64 of letters, digits, `.`, `_`, `-`; the first a letter or digit. Over `ctx mcp`, a write tool's `actor` stands in for it where the store allows the name |
 | `CTX_LOCK_MODE` | probed | Markdown backend. `flock` or `mkdir` forces the lock mode |
 | `CTX_LOCK_TIMEOUT` | `10` | Seconds a write waits for the lock before exit 4 |
 | `CTX_CACHE_DIR` | `$XDG_CACHE_HOME/ctx`, else `~/.cache/ctx` | Optional cache; never required, never created by a read |
@@ -155,7 +155,7 @@ reads work, writes fail with `STORE_NOT_NAMED`.
 
 | Path | Holds |
 |---|---|
-| `ctx-store.json` | `schema_version`, and optionally `generated` and `ignore`: lists of glob patterns over doc paths. A generated doc is not validated and not writable (`GENERATED`); an ignored one is not a doc: every verb answers `NO_SUCH_DOC` for it. `resolve`: `key_regex`, `fields`, `section` (see `ctx help resolve`) |
+| `ctx-store.json` | `schema_version`, and optionally `generated` and `ignore`: lists of glob patterns over doc paths. A generated doc is not validated and not writable (`GENERATED`); an ignored one is not a doc: every verb answers `NO_SUCH_DOC` for it. `resolve`: `key_regex`, `fields`, `section` (see `ctx help resolve`). `mcp`: `actors`, a regular expression; an MCP write may name an actor it matches in full (`ctx mcp`), none when it is absent |
 | `**/*.md` | The docs. A doc's key is its path without `.md` (`reference/lock-modes`) |
 | `.ctx/types/<type>.json` | One schema per doc type |
 | `.ctx/templates/<type>.md` | The scaffold of a new doc of the type; `{{TITLE}}` `{{TYPE}}` `{{DATE}}` `{{KEY}}` `{{SLUG}}` are filled in |
@@ -237,7 +237,7 @@ validated, locked and audited whichever way it arrives.
 |---|---|
 | `ctx <verb>` | hooks, people, cron |
 | `ctx memory` | Anthropic's memory tool: the tool call's input as one JSON object on stdin (`{"command": "view", "path": "/memories/epics/sample.md"}`), the tool result on stdout. `/memories` is the store. Commands `view` `create` `str_replace` `insert` `delete` `rename` are the verbs of the same name |
-| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb but `init`, `ctx_<verb>`, its input the verb's parameters. A tool's description is the verb's help, followed by what differs over MCP: the names of the parameters the help shows in angle brackets, in order, and the options that are not offered. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's. Protocol versions below |
+| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb but `init`, `ctx_<verb>`, its input the verb's parameters. A tool's description is the verb's help, followed by what differs over MCP: the names of the parameters the help shows in angle brackets, in order, and the options that are not offered. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's. Protocol versions below Every tool but the reads (`brief` `get` `find` `resolve` `view` `doctor`) takes an optional `actor`: the write runs as that actor (owner check, audit file and row) when it has the `CTX_ACTOR` form and every store opened allows it in `ctx-store.json` (`mcp.actors`); otherwise `USAGE actor` and nothing is written. One server can so serve several sessions, each writing as itself. The HTTP connector offers no `actor`: it is one identity |
 
 MCP protocol versions, the same for `ctx mcp` and the HTTP connector
 (`ctx-serve`, `docs/connector.md`). Both eras are served in one process,

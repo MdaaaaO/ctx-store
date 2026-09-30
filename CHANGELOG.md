@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file. Generated b
 [conventional-release](https://github.com/MdaaaaO/conventional-release) from
 [Conventional Commits](https://www.conventionalcommits.org).
 
+## 0.6.0 (2026-09-30)
+
+
+### Features
+
+* **core:** archives and log_order handle sectionless logs (#67, #68) ([#70](https://github.com/MdaaaaO/ctx-store/issues/70)) ([8f93831](https://github.com/MdaaaaO/ctx-store/commit/8f93831a2cdef1cdfd50fcdf32ae8719ca8e4853))
+* **mcp:** serve the 2026-07-28 stateless MCP revision too (#64) ([#69](https://github.com/MdaaaaO/ctx-store/issues/69)) ([83cd384](https://github.com/MdaaaaO/ctx-store/commit/83cd38416ae1a35aac09c33a6d44b6d3cf2a14c5))
+* **mcp:** a write can name its actor, within a store pattern (#66) ([#71](https://github.com/MdaaaaO/ctx-store/issues/71)) ([8df2339](https://github.com/MdaaaaO/ctx-store/commit/8df23390cb81cda899bd93125e2da7ec6eb5a76a))
+
+
+### Bug Fixes
+
+* **migrate:** name each doc that blocks migrate --apply (#63) ([#65](https://github.com/MdaaaaO/ctx-store/issues/65)) ([1606695](https://github.com/MdaaaaO/ctx-store/commit/1606695c1edf59cd759e29d0be1825ae9cbb3c1e))
+
 ## 0.5.0 (2026-09-28)
 
 

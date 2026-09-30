@@ -232,6 +232,20 @@ class Bearer(ServeCase):
         with open(os.path.join(self.store, ".audit", "connector.jsonl")) as handle:
             self.assertEqual(json.loads(handle.read())["actor"], "connector")
 
+    def test_the_connector_writes_as_itself(self):
+        """The connector is one identity, authenticated as such: it offers no
+        `actor` and refuses one, even where the store allows the name."""
+        path = os.path.join(self.store, "ctx-store.json")
+        with open(path) as handle:
+            data = json.load(handle)
+        with open(path, "w") as handle:
+            json.dump({**data, "mcp": {"actors": ".+"}}, handle)
+        _, _, listing = self.rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+        self.assertFalse(any("actor" in tool["inputSchema"]["properties"] for tool in listing["result"]["tools"]))
+        self.assertEqual(self.tool("ctx_log", doc=EPIC, text="x", actor="alpha-rollout"),
+                         {"isError": True, "content": [{"type": "text", "text": "USAGE actor: bad command line"}]})
+        self.assertFalse(os.path.exists(os.path.join(self.store, ".audit", "alpha-rollout.jsonl")))
+
     def test_bad_requests(self):
         self.assertEqual(self.call("POST", "/mcp", "not json", {"Authorization": f"Bearer {TOKEN}"})[0], 400)
         self.assertEqual(self.rpc([{"jsonrpc": "2.0", "id": 1, "method": "ping"}])[0], 400)
@@ -318,6 +332,11 @@ class Stateless(ServeCase):
         import io
         self.server.log = io.StringIO()
         return self.server.log
+
+    def test_the_connector_offers_no_actor(self):
+        status, reply = self.modern("tools/list")
+        self.assertEqual(status, 200)
+        self.assertFalse(any("actor" in tool["inputSchema"]["properties"] for tool in reply["result"]["tools"]))
 
     def test_initialize_is_always_the_handshake(self):
         """A client that falls back to `initialize` may still send the new

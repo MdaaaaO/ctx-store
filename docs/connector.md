@@ -11,6 +11,7 @@ separate package in the same repo, standard library only.
 | Item | Rule |
 |---|---|
 | Transport | Streamable HTTP: every JSON-RPC message is one `POST /mcp`, answered with one JSON object; a notification is answered `202`. No stream, no session: `GET` and `DELETE` on `/mcp` answer `405` |
+| Protocol | MCP `2026-07-28` (stateless, no `initialize`) and the handshake revisions `2025-11-25` back to `2024-11-05`, on the same endpoint; versions, headers and refusals in [interface.md](interface.md#front-ends) |
 | Tools | the same as `ctx mcp`: one per built verb |
 | Authentication | required. A server with none configured does not start |
 | Bind | `127.0.0.1`. The way out is a tunnel or a reverse proxy that terminates TLS |

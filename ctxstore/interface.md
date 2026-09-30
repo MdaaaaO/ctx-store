@@ -237,7 +237,28 @@ validated, locked and audited whichever way it arrives.
 |---|---|
 | `ctx <verb>` | hooks, people, cron |
 | `ctx memory` | Anthropic's memory tool: the tool call's input as one JSON object on stdin (`{"command": "view", "path": "/memories/epics/sample.md"}`), the tool result on stdout. `/memories` is the store. Commands `view` `create` `str_replace` `insert` `delete` `rename` are the verbs of the same name |
-| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb but `init`, `ctx_<verb>`, its input the verb's parameters. A tool's description is the verb's help, followed by what differs over MCP: the names of the parameters the help shows in angle brackets, in order, and the options that are not offered. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's |
+| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb but `init`, `ctx_<verb>`, its input the verb's parameters. A tool's description is the verb's help, followed by what differs over MCP: the names of the parameters the help shows in angle brackets, in order, and the options that are not offered. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's. Protocol versions below |
+
+MCP protocol versions, the same for `ctx mcp` and the HTTP connector
+(`ctx-serve`, `docs/connector.md`). Both eras are served in one process,
+on one endpoint; nothing is kept between requests in either.
+
+| Era | Versions | How a request is served |
+|---|---|---|
+| stateless | `2026-07-28` | the request names its version in `params._meta["io.modelcontextprotocol/protocolVersion"]` and carries `io.modelcontextprotocol/clientCapabilities`; no `initialize`. Methods `server/discover`, `tools/list`, `tools/call`; any other method is `-32601`. Every result has `resultType: "complete"` and `_meta["io.modelcontextprotocol/serverInfo"]`; `server/discover` and `tools/list` add `ttlMs: 0` and `cacheScope: "private"` |
+| handshake | `2025-11-25` `2025-06-18` `2025-03-26` `2024-11-05` | a request without that `_meta` version, or naming one of these. `initialize` agrees the version: one this server does not know gets `2025-11-25`. Methods `initialize`, `ping`, `tools/list`, `tools/call`; results as before, without `resultType` |
+
+| Refusal | JSON-RPC error | HTTP | Log reason |
+|---|---|---|---|
+| a version this server does not speak, in `_meta` or in the `MCP-Protocol-Version` header | `-32022`, `data.supported` (the versions above, newest first) and `data.requested` | 400 | `protocol-version` |
+| `_meta` lacks the version or the client capabilities, or the header names `2026-07-28` and `_meta` no version | `-32602` | 400 | `meta-missing` |
+| the `_meta` version is not a string | `-32602` | 400 | `meta-invalid` |
+| HTTP, stateless: `MCP-Protocol-Version`, `Mcp-Method` or (`tools/call`) `Mcp-Name` missing or not the body's value; `Mcp-Name` may be `=?base64?…?=` | `-32020` | 400 | `header-mismatch` |
+| stateless: a method not served | `-32601` | 404 | `method-unknown` |
+
+Over HTTP a notification is answered `202`, or `400` with `-32022` and no id when its
+`MCP-Protocol-Version` header names a version this server does not speak. Authentication is
+checked before any of this: a request without it is `401`.
 
 Claude Desktop, `claude_desktop_config.json`:
 

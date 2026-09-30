@@ -12,8 +12,8 @@ import unittest
 import urllib.parse
 
 from ctxserve import auth as oauth
-from ctxserve.server import PROTOCOLS, build
-from tests.harness import FIXTURE
+from ctxserve.server import PROTOCOLS, SUPPORTED, build
+from tests.harness import FIXTURE, VERSION
 
 SECRET = "correct horse battery staple"
 TOKEN = "static-token-for-claude-code-0123"
@@ -291,6 +291,177 @@ class Bearer(ServeCase):
                               f"Content-Type: application/json\r\nContent-Length: {length}\r\n\r\n").encode())
                 self.assertEqual(link.recv(64).split(b" ")[1], status, length)
         self.assertTrue(self.tool("ctx_log", doc=EPIC, text="ghp_" + "a" * 36)["isError"])
+
+
+class Stateless(ServeCase):
+    """MCP 2026-07-28: no `initialize`; each request names its version in `_meta`
+    and mirrors it, its method and its tool's name in headers (#64)."""
+
+    MODERN = "2026-07-28"
+
+    def modern(self, method, params=None, ident=1, version=MODERN, meta=None, token=TOKEN, **headers):
+        """(status, reply) of one 2026-07-28 request with the headers the binding asks for;
+        a header given as None is left out."""
+        meta = {"io.modelcontextprotocol/protocolVersion": version,
+                "io.modelcontextprotocol/clientInfo": {"name": "probe", "version": "1"},
+                "io.modelcontextprotocol/clientCapabilities": {}} if meta is None else meta
+        params = {**(params or {}), "_meta": meta}
+        sent = {"MCP-Protocol-Version": version, "Mcp-Method": method}
+        if method == "tools/call":
+            sent["Mcp-Name"] = params.get("name")
+        sent.update({name.replace("_", "-"): value for name, value in headers.items()})
+        sent = {name: value for name, value in sent.items() if value is not None}
+        status, _, reply = self.rpc({"jsonrpc": "2.0", "id": ident, "method": method, "params": params}, token, **sent)
+        return status, reply
+
+    def logged(self):
+        import io
+        self.server.log = io.StringIO()
+        return self.server.log
+
+    def test_a_modern_client_is_served_on_its_first_request(self):
+        log = self.logged()
+        status, reply = self.modern("server/discover")
+        self.assertEqual((status, reply), (200, {"jsonrpc": "2.0", "id": 1, "result": {
+            "resultType": "complete", "supportedVersions": list(SUPPORTED), "capabilities": {"tools": {}},
+            "ttlMs": 0, "cacheScope": "private",
+            "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "ctx", "version": VERSION}}}}))
+        self.assertEqual(SUPPORTED[0], self.MODERN)
+        self.assertEqual(list(SUPPORTED[1:]), list(PROTOCOLS))
+        status, reply = self.modern("tools/list")
+        self.assertEqual(status, 200)
+        result = reply["result"]
+        self.assertEqual((result["resultType"], result["ttlMs"], result["cacheScope"]), ("complete", 0, "private"))
+        self.assertIn("ctx_log", [tool["name"] for tool in result["tools"]])
+        status, reply = self.modern("tools/call", {"name": "ctx_log", "arguments": {
+            "doc": EPIC, "text": "stateless", "date": "2026-01-09"}})
+        self.assertEqual((status, reply["result"]), (200, {
+            "resultType": "complete", "isError": False,
+            "content": [{"type": "text", "text": "logged: epics/sample-rollout"}],
+            "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "ctx", "version": VERSION}}}))
+        with open(os.path.join(self.store, EPIC + ".md")) as handle:
+            self.assertTrue(handle.read().endswith("- 2026-01-09 — stateless\n"))
+        # a tool's failure is still a result; a tool that does not exist is still -32602
+        status, reply = self.modern("tools/call", {"name": "ctx_log", "arguments": {"doc": "epics/none", "text": "x"}})
+        self.assertEqual((status, reply["result"]["isError"]), (200, True))
+        status, reply = self.modern("tools/call", {"name": "rm", "arguments": {}})
+        self.assertEqual((status, reply["error"]["code"]), (200, -32602))
+        # a notification is accepted as before
+        self.assertEqual(self.rpc({"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {}},
+                                  **{"MCP-Protocol-Version": self.MODERN})[::2], (202, None))
+        self.assertEqual(log.getvalue().splitlines(), ["127.0.0.1 POST /mcp 200"] * 5 + ["127.0.0.1 POST /mcp 202"])
+
+    def test_a_method_of_the_handshake_revisions_only_is_not_found(self):
+        log = self.logged()
+        for method in ("ping", "resources/list"):
+            status, reply = self.modern(method)
+            self.assertEqual((status, reply["error"]["code"], reply["id"]), (404, -32601, 1), method)
+        self.assertEqual(log.getvalue().splitlines(), ["127.0.0.1 POST /mcp 404 method-unknown"] * 2)
+
+    def test_a_legacy_client_is_served_as_before(self):
+        status, _, reply = self.rpc({"jsonrpc": "2.0", "id": 7, "method": "initialize",
+                                     "params": {"protocolVersion": "2025-11-25", "capabilities": {}}},
+                                    **{"MCP-Protocol-Version": "2025-11-25"})
+        self.assertEqual(reply["result"], {"protocolVersion": "2025-11-25", "capabilities": {"tools": {}},
+                                           "serverInfo": {"name": "ctx", "version": VERSION}})
+        listing = self.rpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, **{"MCP-Protocol-Version": "2025-11-25"})
+        self.assertEqual(listing[0], 200)
+        self.assertEqual(sorted(listing[2]["result"]), ["tools"])  # no resultType, no cache hints
+        self.assertEqual(self.tool("ctx_find", query="region")["content"][0]["text"][:6], "2 hits")
+        self.assertEqual(self.rpc({"jsonrpc": "2.0", "id": 3, "method": "server/discover"})[2]["error"]["code"], -32601)
+        # `initialize` names no modern version: one it is offered gets the newest handshake revision
+        status, _, reply = self.rpc({"jsonrpc": "2.0", "id": 7, "method": "initialize",
+                                     "params": {"protocolVersion": self.MODERN, "capabilities": {}}},
+                                    **{"MCP-Protocol-Version": self.MODERN})
+        self.assertEqual((status, reply["result"]["protocolVersion"]), (200, PROTOCOLS[0]))
+        # a handshake revision named in `_meta` is served as that revision
+        status, reply = self.modern("tools/list", version="2025-11-25")
+        self.assertEqual((status, sorted(reply["result"])), (200, ["tools"]))
+
+    def test_the_dual_era_probe(self):
+        """A client that speaks both eras sends a modern request first. This server answers it;
+        a version it does not know is refused with a modern error, so the client retries with one
+        from the list instead of falling back to `initialize`."""
+        log = self.logged()
+        status, reply = self.modern("tools/list", version="2027-01-01")
+        self.assertEqual(status, 400)
+        self.assertEqual(reply, {"jsonrpc": "2.0", "id": 1, "error": {
+            "code": -32022, "message": "Unsupported protocol version",
+            "data": {"supported": list(SUPPORTED), "requested": "2027-01-01"}}})
+        retry = reply["error"]["data"]["supported"][0]
+        status, reply = self.modern("tools/list", version=retry, ident=2)
+        self.assertEqual((status, reply["result"]["resultType"]), (200, "complete"))
+        # claude.ai's opening today: a 2026-07-28 request first; it is answered, so no fallback
+        status, reply = self.modern("tools/call", {"name": "ctx_brief", "arguments": {"registry": True}}, ident=3)
+        self.assertTrue(reply["result"]["content"][0]["text"].startswith("sessions: 2 not ended"))
+        self.assertEqual(log.getvalue().splitlines(),
+                         ["127.0.0.1 POST /mcp 400 protocol-version", "127.0.0.1 POST /mcp 200", "127.0.0.1 POST /mcp 200"])
+
+    def test_an_unsupported_version(self):
+        log = self.logged()
+        # named in `_meta` and the header alike
+        for version in ("2099-01-01", "1.0", ""):
+            status, reply = self.modern("server/discover", version=version)
+            self.assertEqual((status, reply["error"]["code"], reply["error"]["data"]),
+                             (400, -32022, {"supported": list(SUPPORTED), "requested": version}), version)
+        # in the header of a request of the handshake revisions
+        status, _, reply = self.rpc({"jsonrpc": "2.0", "id": 5, "method": "tools/list"}, **{"MCP-Protocol-Version": "2099-01-01"})
+        self.assertEqual((status, reply["id"], reply["error"]["code"], reply["error"]["data"]["requested"]),
+                         (400, 5, -32022, "2099-01-01"))
+        # a notification has no id to answer, and still is not accepted
+        status, _, reply = self.rpc({"jsonrpc": "2.0", "method": "notifications/cancelled"}, **{"MCP-Protocol-Version": "2099-01-01"})
+        self.assertEqual((status, reply["id"], reply["error"]["code"]), (400, None, -32022))
+        self.assertEqual(log.getvalue().splitlines(), ["127.0.0.1 POST /mcp 400 protocol-version"] * 5)
+        self.assertNotIn("2099", log.getvalue())
+
+    def test_headers_must_match_the_body(self):
+        log = self.logged()
+        call = {"name": "ctx_find", "arguments": {"query": "region"}}
+        refused = [
+            ("tools/list", None, {"MCP_Protocol_Version": None}),              # the version header missing
+            ("tools/list", None, {"MCP_Protocol_Version": "2025-11-25"}),      # another version than `_meta`'s
+            ("tools/list", None, {"Mcp_Method": None}),                        # the method header missing
+            ("tools/list", None, {"Mcp_Method": "tools/call"}),                # another method than the body's
+            ("tools/list", None, {"Mcp_Method": "Tools/List"}),                # values are case-sensitive
+            ("tools/call", call, {"Mcp_Name": None}),                          # the name header missing
+            ("tools/call", call, {"Mcp_Name": "ctx_log"}),                     # another tool than the body's
+            ("tools/call", call, {"Mcp_Name": "=?base64?Y3R4X2xvZw==?="}),     # the same, encoded
+            ("tools/call", call, {"Mcp_Name": "=?base64?not base64?="}),       # an encoding that does not decode
+            ("tools/call", call, {"Mcp_Name": "ctx_find\x7f"}),                # a character a header may not carry
+        ]
+        for method, params, headers in refused:
+            status, reply = self.modern(method, params, **headers)
+            self.assertEqual((status, reply["id"], reply["error"]["code"]), (400, 1, -32020), headers)
+        # a name in the Base64 sentinel form is decoded before it is compared
+        status, reply = self.modern("tools/call", call, Mcp_Name="=?base64?" + base64.b64encode(b"ctx_find").decode() + "?=")
+        self.assertEqual((status, reply["result"]["isError"]), (200, False))
+        # header names are not case-sensitive
+        status, reply = self.modern("tools/list", MCP_Protocol_Version=None, Mcp_Method=None,
+                                    **{"mcp-protocol-version": self.MODERN, "MCP-METHOD": "tools/list"})
+        self.assertEqual(status, 200)
+        # `_meta` lacks what every request must carry
+        meta = {"io.modelcontextprotocol/protocolVersion": self.MODERN}
+        for params, headers in (({"_meta": meta}, {}), ({}, {"MCP-Protocol-Version": self.MODERN}),
+                                ({"_meta": {**meta, "io.modelcontextprotocol/clientCapabilities": []}}, {}),
+                                ({"_meta": {"io.modelcontextprotocol/protocolVersion": 20260728}}, {})):
+            status, _, reply = self.rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": params},
+                                        **{"MCP-Protocol-Version": self.MODERN, "Mcp-Method": "tools/list", **headers})
+            self.assertEqual((status, reply["error"]["code"]), (400, -32602), params)
+        self.assertEqual(log.getvalue().splitlines(),
+                         ["127.0.0.1 POST /mcp 400 header-mismatch"] * len(refused) + ["127.0.0.1 POST /mcp 200"] * 2
+                         + ["127.0.0.1 POST /mcp 400 meta-missing"] * 3 + ["127.0.0.1 POST /mcp 400 meta-invalid"])
+        for text in ("ctx_log", "ctx_find", "base64", "Tools/List", "probe"):
+            self.assertNotIn(text, log.getvalue())
+
+    def test_authentication_comes_first(self):
+        log = self.logged()
+        for token in (None, "wrong-token-wrong-token"):
+            for version in (self.MODERN, "2099-01-01"):
+                status, reply = self.modern("tools/list", version=version, token=token)
+                self.assertEqual((status, reply), (401, {"error": "unauthorized"}))
+            status, reply = self.modern("tools/list", token=token, Mcp_Method="tools/call")
+            self.assertEqual(status, 401)
+        self.assertEqual(log.getvalue().splitlines(), ["127.0.0.1 POST /mcp 401"] * 6)
 
 
 class OAuth(ServeCase):

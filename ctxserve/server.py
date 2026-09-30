@@ -2,7 +2,9 @@
 
 Every JSON-RPC message is one POST to /mcp, answered with one JSON object
 (a request) or 202 (a notification). The server keeps no session and opens
-no stream, so GET and DELETE on /mcp answer 405.
+no stream, so GET and DELETE on /mcp answer 405. Both eras of MCP are served
+there: a 2026-07-28 request on its own, a request of the handshake revisions
+as before (ctxstore/mcp.py decides which, and checks the headers).
 """
 import html
 import json
@@ -16,7 +18,8 @@ from ctxstore import __version__, mcp
 from .auth import Auth, Refused, State
 
 LIMIT = 1024 * 1024  # bytes of a request body
-PROTOCOLS = mcp.PROTOCOLS
+PROTOCOLS = mcp.PROTOCOLS  # the handshake revisions `initialize` agrees on
+SUPPORTED = mcp.SUPPORTED  # those and the stateless 2026-07-28
 ORIGINS = ("https://claude.ai", "https://claude.com")
 METHODS = ("GET", "POST", "DELETE", "PUT", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT")
 ROUTES = ("/mcp", "/authorize", "/token", "/register", "/.well-known/oauth-authorization-server")
@@ -224,22 +227,15 @@ class Handler(BaseHTTPRequestHandler):
             self.why = "batch"
             return self.send(400, {"jsonrpc": "2.0", "id": None,
                                    "error": {"code": -32600, "message": "one message per request"}})
-        # The version is agreed in `initialize`: a client may name one this server does not know
-        # there, in the header and the body, and gets the newest one this server speaks. Only a
-        # request after that must carry a version both know.
-        version = self.headers.get("MCP-Protocol-Version")
-        opening = isinstance(message, dict) and message.get("method") == "initialize"
-        params = message.get("params") if opening else None
-        asked = params.get("protocolVersion") if isinstance(params, dict) else None
-        if opening and (version is not None and version not in PROTOCOLS or asked not in PROTOCOLS):
-            self.why = "protocol-negotiated"  # the server's words, never the client's text
-        elif not opening and version is not None and version not in PROTOCOLS:
-            self.why = "protocol-version"
-            return self.send(400, {"error": "unsupported MCP-Protocol-Version", "supported": list(PROTOCOLS)})
-        reply = mcp.respond(message, self.server.environ, None)
+        # The version is decided after authentication, by the shared MCP code: `initialize` agrees
+        # one (a version this server does not know gets the newest handshake revision), a request
+        # that names 2026-07-28 in `_meta` is served statelessly once its headers match its body,
+        # and a version this server does not speak is refused with the list it does. The reason
+        # logged is the server's word, never the client's text.
+        reply, status, self.why = mcp.answer(message, self.server.environ, None, self.headers)
         if reply is None:
-            return self.send(202)
-        self.send(200, reply)
+            return self.send(status)
+        self.send(status, reply)
 
 
 def build(environ, log=None, clock=None):

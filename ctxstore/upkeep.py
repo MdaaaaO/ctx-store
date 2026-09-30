@@ -82,6 +82,12 @@ def migrate(store, params, config):
         return {"pending": public}, "\n".join([f"{len(plan)} docs to migrate"] + rows)
     if plan and not store.named:
         raise CtxError("STORE_NOT_NAMED")
+    # Every doc is checked at its new version before any is written: a doc that
+    # would not be valid is named, as `validate` names it, and the run writes nothing.
+    blocked = [(code, detail, p["doc"]) for p in plan
+               for code, detail in store.findings(p["doc"], p["text"].encode("utf-8"))]
+    if blocked:
+        raise Findings(blocked)
     for p in plan:
         store.write("migrate", p["doc"], lambda current, p=p: p["text"], now=now, actor=_owner(store, p["doc"], config))
     return {"migrated": public}, "\n".join([f"{len(plan)} docs migrated"] + rows)

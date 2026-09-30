@@ -33,8 +33,11 @@ def _migrated(store, doc, name):
         for old, new in step.get("rename_sections", {}).items():
             body = sections.rename(body, old, new)
             log = new if log == old else log
-        if "log_order" in step and log:
-            body = sections.order_entries(body, log, step["log_order"], step.get("log_order_from"))
+        if "log_order" in step:
+            if log:
+                body = sections.order_entries(body, log, step["log_order"], step.get("log_order_from"))
+            else:
+                body = sections.order_body(body, step["log_order"], step.get("log_order_from"))
         for pair in step.get("replace_comments", []):
             body = sections.replace_in_comments(body, pair["old"], pair["new"])
         text = head + body

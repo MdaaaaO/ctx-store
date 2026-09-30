@@ -224,6 +224,58 @@ class Migrate(UpkeepCase):
                    "STORE_NOT_NAMED: a write needs CTX_STORE or --store")
 
 
+NOTE_V1 = {
+    "version": 1,
+    "migrations": [{"to": 1, "log_order": "oldest-first"}],
+    "frontmatter": {"title": {"required": True}, "type": {"const": "note"}},
+}
+NOTE_BODY = (
+    "---\ntitle: Notes\ntype: note\nupdated: 2026-01-01\n---\n\n# Notes\n\n"
+    "Some intro prose about this note, never touched.\n\n"
+    "<!-- newest first -->\n"
+    "- 2026-01-03 — third.\n- 2026-01-02 — second.\n- 2026-01-01 — first.\n\n"
+    "## Related\n- something else entirely, not a log line.\n"
+)
+
+
+class SectionlessMigrate(UpkeepCase):
+    """`log_order` also reorders the body-level dated list of a type with no
+    `log.section`; prose, comments and anything past the first `##` stay put."""
+
+    def setUp(self):
+        super().setUp()
+        self.put("notes/plain", NOTE_BODY)
+        self.schema("note", NOTE_V1)
+
+    def test_reorders_the_body_level_list_and_leaves_prose_and_comments(self):
+        self.assertEqual(self.run_ctx("migrate", "--apply")[0], 0)
+        text = self.text("notes/plain")
+        self.assertIn(
+            "# Notes\n\nSome intro prose about this note, never touched.\n\n"
+            "<!-- newest first -->\n"
+            "- 2026-01-01 — first.\n- 2026-01-02 — second.\n- 2026-01-03 — third.\n\n"
+            "## Related\n- something else entirely, not a log line.\n",
+            text)
+        self.assertIn("schema_version: note.v1\n", text)
+
+    def test_a_second_run_changes_nothing(self):
+        self.assertEqual(self.run_ctx("migrate", "--apply")[0], 0)
+        before = self.text("notes/plain")
+        self.assertEqual(self.run_ctx("migrate", "--apply"), (0, "0 docs migrated\n", ""))
+        self.assertEqual(self.text("notes/plain"), before)
+
+    def test_a_declared_source_order_reverses_a_log_of_one_day(self):
+        one_day = NOTE_BODY.replace("2026-01-03", "2026-01-01").replace("2026-01-02", "2026-01-01")
+        for source, expect in ((None, "third"), ("newest-first", "first")):
+            with self.subTest(source=source):
+                self.put("notes/plain", one_day)
+                steps = [{**NOTE_V1["migrations"][0], "log_order_from": source}] if source else NOTE_V1["migrations"]
+                self.schema("note", {**NOTE_V1, "migrations": steps})
+                self.assertEqual(self.run_ctx("migrate", "--apply")[0], 0)
+                log = [line for line in self.text("notes/plain").split("\n") if line.startswith("- 2026")]
+                self.assertTrue(log[0].endswith(f" {expect}."), log)
+
+
 class SizeGuard(UpkeepCase):
     def test_a_large_doc_is_a_warning(self):
         self.put("reference/big", "---\ntitle: Big\ntype: reference\n---\n\n" + "a line of text\n" * 2200)

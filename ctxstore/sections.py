@@ -169,6 +169,22 @@ def body_append_line(body, line):
     return "\n".join(lines)
 
 
+def order_body(body, order, source=None):
+    """The body with the body-level dated list in `order`, by the same rules
+    as `order_entries`."""
+    found = body_entries(body)
+    if not found:
+        return body
+    lines = body.split("\n")
+    dates = [DATED.match(lines[index]).group(1) for index in found]
+    wanted = sorted(dates, reverse=order == "newest-first")
+    if dates != wanted[::-1] or dates == wanted and not source:
+        return body
+    for index, line in zip(found, [lines[i] for i in reversed(found)]):
+        lines[index] = line
+    return "\n".join(lines)
+
+
 def prepend_line(body, name, line):
     """The body with one line added before the section's first entry: the
     first line that is neither blank nor a comment. An empty section takes it

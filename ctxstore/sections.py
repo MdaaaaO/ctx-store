@@ -120,6 +120,55 @@ def entries(lines):
             yield number, line
 
 
+def title_span(body):
+    """(first line after the `#` title, the first `##` heading after it, or
+    the end of the body): the region a sectionless log lives in, for a type
+    whose `log` declares no `section`."""
+    found = headings(body)
+    titles = [i for i, (_, level, _) in enumerate(found) if level == 1]
+    start = found[titles[0]][0] + 1 if titles else 0
+    end = len(body.split("\n"))
+    for index, level, _ in found:
+        if level >= 2 and index >= start:
+            end = index
+            break
+    return start, end
+
+
+def body_entries(body):
+    """Absolute line indices of the body-level dated list: the `- <date> —
+    …` lines after the `#` title and before the first `##` heading. Prose
+    and HTML comments around them are skipped, and never moved."""
+    start, end = title_span(body)
+    lines = body.split("\n")
+    return [start + number - 1 for number, line in entries(lines[start:end]) if DATED.match(line)]
+
+
+def body_prepend_line(body, line):
+    """The body with one line added before the body-level list's first
+    entry. A list with no entries takes it as its last line."""
+    found = body_entries(body)
+    if not found:
+        return body_append_line(body, line)
+    lines = body.split("\n")
+    lines[found[0]:found[0]] = [line]
+    return "\n".join(lines)
+
+
+def body_append_line(body, line):
+    """The body with one line added after the title region's last
+    non-blank line: the body-level list's last entry, once it has one."""
+    start, end = title_span(body)
+    lines = body.split("\n")
+    last = end
+    while last > start and not lines[last - 1].strip():
+        last -= 1
+    lines[last:last] = [line]
+    if end == len(body.split("\n")) and last == end:
+        lines.append("")  # the title region ran to the end of a file without a final newline
+    return "\n".join(lines)
+
+
 def prepend_line(body, name, line):
     """The body with one line added before the section's first entry: the
     first line that is neither blank nor a comment. An empty section takes it

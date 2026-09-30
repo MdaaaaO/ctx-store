@@ -188,7 +188,7 @@ every key is optional:
 | `paths` | Glob patterns: docs at these paths are of this type when they have no `type` field |
 | `frontmatter` | Field → rule: `required`, `kind` (`string` `list` `date` `timestamp`), `const`, `enum` |
 | `sections` | `##` headings every doc of the type has |
-| `log` | `section`: where `log` adds its entry; `order`: `oldest-first` (default, the entry goes last) or `newest-first` (the entry goes first); `grammar`: a regular expression every line of that section matches; `ledger: true`: `log` appends raw lines at the end of the doc |
+| `log` | `section`: where `log` adds its entry; without it, `maintain` and `migrate`'s `log_order` use the body-level dated list instead (the `- <date> — …` lines after the `#` title and before the first `##`); `order`: `oldest-first` (default, the entry goes last) or `newest-first` (the entry goes first); `grammar`: a regular expression every line of that section matches; `ledger: true`: `log` appends raw lines at the end of the doc |
 | `owner` | The field that names the doc's owner; a write by another actor fails with `NOT_OWNER` |
 | `version` | The type's schema version, a number; 0 or absent: the type has no versions |
 | `migrations` | One step per version, in order; step `n` takes a doc from version `n-1` to `n` (`ctx help migrate`) |
@@ -482,8 +482,13 @@ The periodic pass, for an asynchronous hook, cron or the end of a session.
 A second run changes nothing.
 
 1. Log tails: a doc over `size_guard` bytes (default 30000) keeps the
-   `keep_log` newest entries of its log (default 20); the older ones move,
-   oldest first, to the doc `archive` names (default `archive/{slug}-log`).
+   `keep_log` newest entries of its log (default 20); the older ones move to
+   the doc `archive` names (default `archive/{slug}-log`), which is created
+   if it does not exist yet. The archive doc's own type (default `log`)
+   decides the shape: with `log.section` the moved entries go into that
+   section, else into its body-level dated list; `log.order`
+   `newest-first` puts the moved block at the top, newest first,
+   `oldest-first` (default) at the end, oldest first, as they are kept.
 2. Sessions: a session doc with `status: ended` and a heartbeat older than
    `session_days` (default 7) moves to `session_archive` (default
    `sessions/archive/{name}`), links to it rewritten; its audit rows are put

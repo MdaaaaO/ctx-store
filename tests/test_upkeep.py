@@ -46,6 +46,18 @@ class UpkeepCase(StoreCase):
         with open(path, "w") as handle:
             json.dump(data, handle)
 
+    def big_log(self, order=None):
+        if order:
+            with open(os.path.join(self.store, ".ctx", "types", "epic.json")) as handle:
+                rules = json.load(handle)
+            rules["log"]["order"] = order
+            self.schema("epic", rules)
+        entries = [f"- 2026-01-{day:02} — entry {day} " + "x" * 900 for day in range(1, 41)]
+        if order == "newest-first":
+            entries.reverse()
+        self.put(EPIC, self.text(EPIC).split("## Session log\n")[0] + "## Session log\n<!-- log -->\n" + "\n".join(entries) + "\n")
+        return entries
+
 
 class Versions(UpkeepCase):
     def test_a_type_without_versions_needs_no_stamp(self):
@@ -225,18 +237,6 @@ class SizeGuard(UpkeepCase):
 
 
 class Maintain(UpkeepCase):
-    def big_log(self, order=None):
-        if order:
-            with open(os.path.join(self.store, ".ctx", "types", "epic.json")) as handle:
-                rules = json.load(handle)
-            rules["log"]["order"] = order
-            self.schema("epic", rules)
-        entries = [f"- 2026-01-{day:02} — entry {day} " + "x" * 900 for day in range(1, 41)]
-        if order == "newest-first":
-            entries.reverse()
-        self.put(EPIC, self.text(EPIC).split("## Session log\n")[0] + "## Session log\n<!-- log -->\n" + "\n".join(entries) + "\n")
-        return entries
-
     def test_nothing_to_do(self):
         before = sorted((folder, sorted(files)) for folder, _, files in os.walk(self.store))
         self.assertEqual(self.run_ctx("maintain"), (0, "ok: nothing to do\n", ""))
@@ -318,6 +318,79 @@ class Maintain(UpkeepCase):
         self.fails(ctx("maintain", cwd=self.store, walk=True, env={"CTX_ACTOR": "tester"}), 5,
                    "STORE_NOT_NAMED: a write needs CTX_STORE or --store")
         self.fails(self.run_ctx("maintain", "now"), 1, "USAGE now: bad command line")
+
+
+class SectionlessArchive(UpkeepCase):
+    """The archive doc's own type decides where and in which order `maintain`
+    moves entries: `## <name>` when `log.section` is declared, else the
+    body-level dated list; newest-first at the top, oldest-first at the end."""
+
+    def test_new_archive_with_no_section_is_sectionless_oldest_first(self):
+        self.schema("log", {"log": {}})
+        entries = self.big_log()
+        self.assertEqual(self.run_ctx("maintain")[1],
+                         "archived: 20 log entries of epics/sample-rollout → archive/sample-rollout-log\n")
+        archive = self.text("archive/sample-rollout-log")
+        self.assertTrue(archive.startswith(
+            "---\ntitle: Log of epics/sample-rollout\ntype: log\nupdated: 2026-01-08\n---\n\n"
+            "# Log of epics/sample-rollout\n"))
+        self.assertNotIn("##", archive)
+        self.assertEqual([l for l in archive.split("\n") if l.startswith("- ")], entries[:20])
+        self.assertEqual(self.run_ctx("validate")[0], 0)
+        self.assertEqual(self.run_ctx("maintain"), (0, "ok: nothing to do\n", ""))
+
+    def test_new_archive_with_no_section_is_sectionless_newest_first(self):
+        self.schema("log", {"log": {"order": "newest-first"}})
+        entries = self.big_log()
+        self.assertEqual(self.run_ctx("maintain")[0], 0)
+        archive = self.text("archive/sample-rollout-log")
+        self.assertNotIn("##", archive)
+        self.assertEqual([l for l in archive.split("\n") if l.startswith("- ")], list(reversed(entries[:20])))
+        self.assertEqual(self.run_ctx("validate")[0], 0)
+        self.assertEqual(self.run_ctx("maintain"), (0, "ok: nothing to do\n", ""))
+
+    def test_a_newest_first_archive_type_can_still_use_a_section(self):
+        self.schema("log", {"log": {"section": "Log", "order": "newest-first"}})
+        entries = self.big_log()
+        self.assertEqual(self.run_ctx("maintain")[0], 0)
+        archive = self.text("archive/sample-rollout-log")
+        self.assertIn("## Log\n", archive)
+        self.assertEqual([l for l in archive.split("\n") if l.startswith("- ")], list(reversed(entries[:20])))
+        self.assertEqual(self.run_ctx("validate")[0], 0)
+        self.assertEqual(self.run_ctx("maintain"), (0, "ok: nothing to do\n", ""))
+
+    def test_a_second_sectionless_tail_lands_by_the_archives_order(self):
+        for order in (None, "newest-first"):
+            with self.subTest(order=order):
+                if os.path.exists(self.path("archive/sample-rollout-log")):
+                    os.unlink(self.path("archive/sample-rollout-log"))
+                self.schema("log", {"log": {"order": order}} if order else {"log": {}})
+                self.big_log()
+                self.assertEqual(self.run_ctx("maintain")[0], 0)
+                for day in range(41, 60):
+                    self.assertEqual(self.run_ctx(
+                        "log", EPIC, f"entry {day} " + "y" * 900, "--date", f"2026-02-{day - 40:02}")[0], 0)
+                self.assertEqual(self.run_ctx("maintain")[1],
+                                 "archived: 19 log entries of epics/sample-rollout → archive/sample-rollout-log\n")
+                archive = self.text("archive/sample-rollout-log")
+                self.assertNotIn("##", archive)
+                archived = [l for l in archive.split("\n") if l.startswith("- ")]
+                self.assertEqual(len(archived), 39)
+                self.assertEqual(archived, sorted(archived, reverse=order == "newest-first"))
+                self.assertEqual(self.run_ctx("validate", "--changed", "--adopt")[0], 0)
+
+    def test_an_existing_archives_own_type_governs_it_not_the_default(self):
+        self.schema("weekly", {"log": {}})
+        self.put("archive/sample-rollout-log",
+                  "---\ntitle: Log of epics/sample-rollout\ntype: weekly\nupdated: 2026-01-01\n---\n\n"
+                  "# Log of epics/sample-rollout\n\n- 2026-01-01 — prior entry.\n")
+        self.big_log()
+        self.assertEqual(self.run_ctx("maintain")[0], 0)
+        archive = self.text("archive/sample-rollout-log")
+        self.assertIn("type: weekly\n", archive)
+        self.assertNotIn("##", archive)
+        self.assertIn("- 2026-01-01 — prior entry.\n", archive)
+        self.assertEqual(self.run_ctx("validate")[0], 0)
 
 
 class Git(UpkeepCase):

@@ -132,15 +132,28 @@ def _archive_logs(store, rules, config, now, date, report):
         kept = "\n".join(line for index, line in enumerate(lines) if index not in set(old))
         head = doc.text[: len(doc.text) - len(doc.body)]
         target = store.key(pattern.format(slug=key.rsplit("/", 1)[-1], key=key))
+        archive_type = store.type_of(store.load(target)) if store.has(target) else None
+        archive_log = store.types.get(archive_type or "log", {}).get("log")
+        section = "Log" if archive_log is None else archive_log.get("section")
+        archive_newest = archive_log is not None and archive_log.get("order") == "newest-first"
 
-        def extend(current, moved=moved, key=key):
+        def extend(current, moved=moved, key=key, section=section, archive_newest=archive_newest):
             if current is None:
-                current = f"---\ntitle: Log of {key}\ntype: log\nupdated: {date}\n---\n\n# Log of {key}\n\n## Log\n"
+                title = f"# Log of {key}\n"
+                current = (f"---\ntitle: Log of {key}\ntype: log\nupdated: {date}\n---\n\n"
+                           + (title + "\n## " + section + "\n" if section else title))
                 if store.stamp("log"):
                     current = frontmatter.set_field(current, "schema_version", store.stamp("log"))
             body = frontmatter.split(current)[1]
             for line in moved:
-                body = sections.append_line(body, "Log", line)
+                if section and archive_newest:
+                    body = sections.prepend_line(body, section, line)
+                elif section:
+                    body = sections.append_line(body, section, line)
+                elif archive_newest:
+                    body = sections.body_prepend_line(body, line)
+                else:
+                    body = sections.body_append_line(body, line)
             return current[: len(current) - len(frontmatter.split(current)[1])] + body
         with store.locked():
             store.apply("maintain", target, extend, now, config.actor)

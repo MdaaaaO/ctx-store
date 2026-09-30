@@ -246,7 +246,9 @@ on one endpoint; nothing is kept between requests in either.
 | Era | Versions | How a request is served |
 |---|---|---|
 | stateless | `2026-07-28` | the request names its version in `params._meta["io.modelcontextprotocol/protocolVersion"]` and carries `io.modelcontextprotocol/clientCapabilities`; no `initialize`. Methods `server/discover`, `tools/list`, `tools/call`; any other method is `-32601`. Every result has `resultType: "complete"` and `_meta["io.modelcontextprotocol/serverInfo"]`; `server/discover` and `tools/list` add `ttlMs: 0` and `cacheScope: "private"` |
-| handshake | `2025-11-25` `2025-06-18` `2025-03-26` `2024-11-05` | a request without that `_meta` version, or naming one of these. `initialize` agrees the version: one this server does not know gets `2025-11-25`. Methods `initialize`, `ping`, `tools/list`, `tools/call`; results as before, without `resultType` |
+| handshake | `2025-11-25` `2025-06-18` `2025-03-26` `2024-11-05` | a request without that `_meta` version, or naming one of these, and every `initialize`, whatever its `_meta` or header names: the method itself selects the handshake, so a client that falls back to it is never refused over the version. `initialize` agrees the version: one this server does not know gets `2025-11-25`. Methods `initialize`, `ping`, `tools/list`, `tools/call`; results as before, without `resultType` |
+
+The refusals below never apply to `initialize` (the version it names is agreed, not checked).
 
 | Refusal | JSON-RPC error | HTTP | Log reason |
 |---|---|---|---|

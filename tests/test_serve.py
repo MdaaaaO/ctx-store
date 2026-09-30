@@ -319,6 +319,21 @@ class Stateless(ServeCase):
         self.server.log = io.StringIO()
         return self.server.log
 
+    def test_initialize_is_always_the_handshake(self):
+        """A client that falls back to `initialize` may still send the new
+        version, in `_meta` or the header: the method selects the handshake and
+        the version is agreed, never refused (#48)."""
+        log = self.logged()
+        params = {"protocolVersion": self.MODERN, "capabilities": {}}
+        for status, reply in (self.modern("initialize", params),
+                              self.modern("initialize", params, meta={}, Mcp_Method=None),
+                              self.modern("initialize", params, meta={}, Mcp_Method="tools/list")):
+            self.assertEqual(status, 200)
+            self.assertEqual(reply["result"]["protocolVersion"], PROTOCOLS[0])
+            self.assertNotIn("resultType", reply["result"])
+        self.assertEqual(log.getvalue().count("POST /mcp 200 protocol-negotiated"), 3)
+        self.assertNotIn(" 400 ", log.getvalue())
+
     def test_a_modern_client_is_served_on_its_first_request(self):
         log = self.logged()
         status, reply = self.modern("server/discover")

@@ -599,6 +599,51 @@ class Mcp(StoreCase):
         self.assertEqual([reply["error"]["code"] for reply in replies], [-32700, -32602, -32601, -32600, -32602])
         self.assertEqual([reply["id"] for reply in replies], [None, 1, 2, None, 4])
 
+    def modern(self, ident, method, version="2026-07-28", **params):
+        """A 2026-07-28 request: no handshake before it, its version in `_meta` (#64)."""
+        meta = {"io.modelcontextprotocol/protocolVersion": version, "io.modelcontextprotocol/clientCapabilities": {}}
+        return self.request(ident, method, **params, _meta=meta)
+
+    def test_a_modern_request_over_stdio(self):
+        from ctxstore.mcp import PROTOCOLS, SUPPORTED
+        served = {"io.modelcontextprotocol/serverInfo": {"name": "ctx", "version": VERSION}}
+        # the dual-era probe: `server/discover` first, then work, in the same process
+        found, listing, log, pong = self.talk(
+            self.modern("d", "server/discover"),
+            self.modern(1, "tools/list"),
+            self.request(2, "tools/call", name="ctx_log", arguments={"doc": EPIC, "text": "over stdio", "date": "2026-01-09"},
+                         _meta={"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                                "io.modelcontextprotocol/clientCapabilities": {},
+                                "io.modelcontextprotocol/clientInfo": {"name": "t", "version": "1"}}),
+            self.modern(3, "ping"))
+        self.assertEqual(found, {"jsonrpc": "2.0", "id": "d", "result": {
+            "resultType": "complete", "supportedVersions": ["2026-07-28", *PROTOCOLS], "capabilities": {"tools": {}},
+            "ttlMs": 0, "cacheScope": "private", "_meta": served}})
+        self.assertEqual(list(SUPPORTED), ["2026-07-28", *PROTOCOLS])
+        self.assertEqual((listing["result"]["resultType"], listing["result"]["_meta"]), ("complete", served))
+        self.assertIn("ctx_log", [tool["name"] for tool in listing["result"]["tools"]])
+        self.assertEqual(log["result"], {"resultType": "complete", "isError": False, "_meta": served,
+                                         "content": [{"type": "text", "text": "logged: epics/sample-rollout"}]})
+        self.assertEqual(pong["error"]["code"], -32601)  # 2026-07-28 has no ping
+        self.assertEqual([(row["verb"], row["actor"]) for row in self.audit()], [("log", "tester")])
+
+    def test_a_modern_request_that_is_refused(self):
+        unknown, missing, typed, legacy, plain = self.talk(
+            self.modern(1, "server/discover", version="2099-01-01"),
+            self.request(2, "tools/list", _meta={"io.modelcontextprotocol/protocolVersion": "2026-07-28"}),
+            self.request(3, "tools/list", _meta={"io.modelcontextprotocol/protocolVersion": 20260728,
+                                                 "io.modelcontextprotocol/clientCapabilities": {}}),
+            self.modern(4, "tools/list", version="2025-11-25"),
+            self.request(5, "server/discover"))
+        self.assertEqual(unknown["error"], {"code": -32022, "message": "Unsupported protocol version", "data": {
+            "supported": ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"],
+            "requested": "2099-01-01"}})
+        self.assertEqual((missing["error"]["code"], typed["error"]["code"]), (-32602, -32602))
+        # a handshake revision named in `_meta` is served as that revision; no `_meta` is the handshake era,
+        # which has no `server/discover`
+        self.assertEqual(sorted(legacy["result"]), ["tools"])
+        self.assertEqual(plain["error"]["code"], -32601)
+
     def test_a_write_needs_a_named_store(self):
         code, out, _ = ctx("mcp", env={"CTX_ACTOR": "tester"}, cwd=self.store, walk=True,
                            stdin=json.dumps(self.tool(1, "ctx_log", doc=EPIC, text="x")) + "\n")

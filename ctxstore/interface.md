@@ -121,6 +121,7 @@ Every store has settings, whatever the backend:
 | `ignore` | Glob patterns: not docs. Every verb answers `NO_SUCH_DOC` for them |
 | `resolve` | `key_regex`, `fields`, `section` (`ctx help resolve`) |
 | `maintain` | `size_guard`, `keep_log`, `archive`, `session_days`, `session_archive`, `catalog`, `git_debounce` (`ctx help maintain`) |
+| `mcp` | `actors`: a regular expression; an MCP write may name an actor it matches in full (`ctx mcp`), none when it is absent |
 
 Every write leaves one audit row: `seq` (the store's write counter) `ts`
 `actor` `verb` `doc` `before` `after` (sha256 of the doc, `null` for none).
@@ -237,7 +238,7 @@ validated, locked and audited whichever way it arrives.
 |---|---|
 | `ctx <verb>` | hooks, people, cron |
 | `ctx memory` | Anthropic's memory tool: the tool call's input as one JSON object on stdin (`{"command": "view", "path": "/memories/epics/sample.md"}`), the tool result on stdout. `/memories` is the store. Commands `view` `create` `str_replace` `insert` `delete` `rename` are the verbs of the same name |
-| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb but `init`, `ctx_<verb>`, its input the verb's parameters. A tool's description is the verb's help, followed by what differs over MCP: the names of the parameters the help shows in angle brackets, in order, and the options that are not offered. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's. Protocol versions below Every tool but the reads (`brief` `get` `find` `resolve` `view` `doctor`) takes an optional `actor`: the write runs as that actor (owner check, audit file and row) when it has the `CTX_ACTOR` form and every store opened allows it in `ctx-store.json` (`mcp.actors`); otherwise `USAGE actor` and nothing is written. One server can so serve several sessions, each writing as itself. The HTTP connector offers no `actor`: it is one identity |
+| `ctx mcp` | MCP server over stdio (JSON-RPC 2.0, one message per line): one tool per built verb but `init`, `ctx_<verb>`, its input the verb's parameters. A tool's description is the verb's help, followed by what differs over MCP: the names of the parameters the help shows in angle brackets, in order, and the options that are not offered. A failure is a tool result with `isError` and the error line. `--from` and `--out` are not offered: the server's files are not the client's. Every tool but the reads (`brief` `get` `find` `resolve` `view` `doctor`) takes an optional `actor`: the write runs as that actor (owner check, audit file and row) when it has the `CTX_ACTOR` form and every store opened allows it in `ctx-store.json` (`mcp.actors`); otherwise `USAGE actor` and nothing is written. One server can so serve several sessions, each writing as itself. The HTTP connector offers no `actor`: it is one identity. Protocol versions below. |
 
 MCP protocol versions, the same for `ctx mcp` and the HTTP connector
 (`ctx-serve`, `docs/connector.md`). Both eras are served in one process,

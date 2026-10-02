@@ -1,6 +1,6 @@
-# Optional: ctx runs from a plain copy (`./ctx`). This file is for `pip install`.
+# Optional: ctx runs from a plain copy (`./ctx`). This file builds the `ctx-store` package on PyPI.
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,9 +8,22 @@ name = "ctx-store"
 description = "A markdown context store for coding agents: validated writes, budgeted reads, audit trail."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = []
 dynamic = ["version"]
+keywords = ["context", "agents", "markdown", "mcp", "claude"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development",
+]
+
+[project.urls]
+Homepage = "https://github.com/MdaaaaO/ctx-store"
+Documentation = "https://github.com/MdaaaaO/ctx-store/blob/main/docs/interface.md"
+Changelog = "https://github.com/MdaaaaO/ctx-store/blob/main/CHANGELOG.md"
+Issues = "https://github.com/MdaaaaO/ctx-store/issues"
 
 [project.scripts]
 ctx = "ctxstore.cli:main"

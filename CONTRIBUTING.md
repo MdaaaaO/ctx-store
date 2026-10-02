@@ -39,8 +39,12 @@ asks for a review of the current head. A PR from a fork, a draft, a release PR a
 Releases are cut with [conventional-release](https://github.com/MdaaaaO/conventional-release). A
 release is a `chore(release): X.Y.Z` PR that adds the version's section to `CHANGELOG.md` and bumps
 `ctxstore/VERSION`. Squash-merge it with the title unchanged; the `release` workflow tags that commit
-`vX.Y.Z` and publishes a GitHub Release. A failed release job is re-run: each step does only what is
-missing. Release PRs need no issue and get no automatic review.
+`vX.Y.Z`, publishes a GitHub Release, then builds the package from the tag, checks that the installed wheel
+reports the version and publishes it to [PyPI](https://pypi.org/project/ctx-store/) as `ctx-store`. A failed
+release job is re-run: each step does only what is missing, and the upload skips files PyPI already has.
+To publish an existing tag again (a failed upload, a backfill) without a new commit:
+`gh workflow run release.yml -f version=X.Y.Z` (or Actions → release → Run workflow). Release PRs need no
+issue and get no automatic review.
 
 ## Workflows and secrets
 
@@ -51,3 +55,8 @@ Third-party actions are pinned by commit SHA; Dependabot proposes the bumps. Cha
 |---|---|---|
 | `CLAUDE_CODE_OAUTH_TOKEN` | `claude-review` | the review skips with a notice |
 | `AUTOMERGE_TOKEN` (fine-grained PAT: this repo, Contents + Pull requests read/write) | `auto-merge` | the merge skips with a notice |
+
+PyPI takes no secret: `release` publishes through trusted publishing (OIDC). Only its `pypi` job gets
+`id-token: write`, and it runs in the `pypi` environment, which deploys from `main` only. PyPI's publisher
+entry for `ctx-store` names this repo, `release.yml` and that environment; renaming the workflow or the
+environment breaks the upload until the entry is changed to match.

@@ -115,10 +115,10 @@ def _seconds(stamp):
 def _archive_defaults(store, type_name, source, date):
     """Required fields of a fresh archive doc beyond the fixed template
     (title, type, updated, schema_version), each given a reasonable default:
-    `domain` from the source doc, an enum's first value, today's date for a
-    `date` field; the first candidate the field's rule accepts wins.
-    (fields, None) or (fields so far, the first field with no derivable
-    default)."""
+    `domain` from the source doc, a `const`, an enum's first value, today's
+    date for a `date` field; the first candidate the field's rule accepts
+    wins. (fields, None) or (fields so far, the first field with no
+    derivable default)."""
     fixed = {"title", "type", "updated", "schema_version"}
     fields = {}
     for field, rule in store.types.get(type_name, {}).get("frontmatter", {}).items():

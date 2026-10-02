@@ -486,6 +486,14 @@ class ArchiveDocValidates(UpkeepCase):
         self.assertIn("domain: archive\n", self.text("archive/sample-rollout-log"))
         self.assertEqual(self.run_ctx("validate")[0], 0)
 
+    def test_a_const_field_takes_its_value(self):
+        self.schema("log", {"frontmatter": {"priority": {"required": True, "const": "normal"}}, "log": {}})
+        self.big_log()
+        self.assertEqual(self.run_ctx("maintain")[1],
+                         "archived: 20 log entries of epics/sample-rollout → archive/sample-rollout-log\n")
+        self.assertIn("priority: normal\n", self.text("archive/sample-rollout-log"))
+        self.assertEqual(self.run_ctx("validate")[0], 0)
+
 
 class Git(UpkeepCase):
     def git(self, *args):

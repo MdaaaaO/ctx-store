@@ -191,29 +191,63 @@ def _fit(lines, budget, what="lines"):
     return kept, False
 
 
-def _doc_lines(store, doc, body=False):
+def _csv(raw):
+    """A `--fields`/`--sections` value split on commas, trimmed, emptied of
+    blanks. `None` stays `None` (the option was not given)."""
+    return None if raw is None else [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _moved_body(body, moved):
+    """`body`'s lines with the named `##` sections (already filtered to
+    existing, unambiguous ones) cut whole and reinserted, in `moved`'s
+    order, right before the first section left in place. Everything else —
+    title, preamble, untouched sections — keeps its place."""
+    lines = body.split("\n")
+    keep = [True] * len(lines)
+    blocks = []
+    for heading in moved:
+        start, end = sections.span(body, heading)
+        blocks.append(lines[start - 1:end])  # the heading line through the section's last
+        for index in range(start - 1, end):
+            keep[index] = False
+    rest = [line for index, line in enumerate(lines) if keep[index]]
+    insert_at = len(rest)
+    for index, level, _ in sections.headings("\n".join(rest)):
+        if level == 2:
+            insert_at = index
+            break
+    reordered = rest[:insert_at] + [line for block in blocks for line in block] + rest[insert_at:]
+    return reordered
+
+
+def _doc_lines(store, doc, body=False, fields=None, no_frontmatter=False, order=None):
     name = store.type_of(doc)
     lines = [f"{doc.key} ({name or 'untyped'}, {len(doc.data)} bytes)"]
-    for field, value in doc.fields.items():
-        if field != "type" and value not in ("", []):
-            lines.append(f"{field}: {frontmatter.render(value)}")
+    if not no_frontmatter:
+        for field in fields if fields is not None else doc.fields:
+            value = doc.fields.get(field)
+            if field != "type" and value not in (None, "", []):
+                lines.append(f"{field}: {frontmatter.render(value)}")
+    names, twice = sections.names(doc.body), sections.duplicates(doc.body)
+    moved = [heading for heading in order or () if heading in names and heading not in twice]
     spans = []
-    for heading in sections.names(doc.body):
-        if heading not in sections.duplicates(doc.body):
+    for heading in moved + [heading for heading in names if heading not in moved]:
+        if heading not in twice:
             size = len("\n".join(sections.lines_of(doc.body, heading)).encode("utf-8"))
             spans.append(f"{heading} ({size})")
     if spans:
         lines.append("sections: " + " · ".join(spans))
     log_rules = store.types.get(name or "", {}).get("log", {})
     section = log_rules.get("section")
-    if section in sections.names(doc.body) and section not in sections.duplicates(doc.body):
+    if section in names and section not in twice:
         entries = [line for _, line in sections.entries(sections.lines_of(doc.body, section))]
         if entries:
             lines.append(f"{section} (last {min(TAIL, len(entries))} of {len(entries)}):")
             lines += entries[:TAIL] if log_rules.get("order") == "newest-first" else entries[-TAIL:]
     if body:
         lines.append("")
-        lines += doc.body.strip("\n").split("\n")
+        text = "\n".join(_moved_body(doc.body, moved)) if moved else doc.body
+        lines += text.strip("\n").split("\n")
     return lines
 
 
@@ -228,19 +262,27 @@ def _registry_lines(store):
 
 
 def brief(store, params):
+    if params.get("fields") is not None and params.get("no-frontmatter"):
+        raise CtxError("USAGE", "--fields")
     chosen = [name for name in ("registry", "session", "doc") if params.get(name)]
     if len(chosen) != 1:
         raise CtxError("USAGE", "brief")
     for option in ("links", "near"):
         if params.get(option) and chosen[0] != "doc":
             raise CtxError("USAGE", f"--{option}")
+    for option in ("fields", "no-frontmatter", "sections"):
+        if params.get(option) and chosen[0] == "registry":
+            raise CtxError("USAGE", f"--{option}")
+    fields, order = _csv(params.get("fields")), _csv(params.get("sections"))
+    no_frontmatter = params.get("no-frontmatter", False)
     if chosen[0] == "registry":
         lines = _registry_lines(store)
     elif chosen[0] == "session":
-        lines = _doc_lines(store, _session(store, params["session"]), body=True)
+        lines = _doc_lines(store, _session(store, params["session"]), body=True,
+                            fields=fields, no_frontmatter=no_frontmatter, order=order)
     else:
         doc = store.load(params["doc"])
-        lines = _doc_lines(store, doc)
+        lines = _doc_lines(store, doc, fields=fields, no_frontmatter=no_frontmatter, order=order)
         there, back = [], []
         if params.get("links") or params.get("near"):
             there, back = links.outbound(store, doc), links.inbound(store, doc.key)

@@ -445,6 +445,38 @@ class SectionlessArchive(UpkeepCase):
         self.assertEqual(self.run_ctx("validate")[0], 0)
 
 
+class ArchiveDocValidates(UpkeepCase):
+    """A freshly created archive doc carries a reasonable default for every
+    field its type requires; a field with none is refused and nothing is
+    written to either doc (#74)."""
+
+    def test_required_fields_get_reasonable_defaults(self):
+        self.schema("log", {"frontmatter": {
+            "domain": {"required": True}, "status": {"required": True, "enum": ["open", "closed"]},
+            "logged_on": {"required": True, "kind": "date"}, "updated": {"kind": "date"},
+        }, "log": {}})
+        self.put(EPIC, self.text(EPIC).replace("status: active\n", "status: active\ndomain: payments\n"))
+        self.big_log()
+        self.assertEqual(self.run_ctx("maintain")[1],
+                         "archived: 20 log entries of epics/sample-rollout → archive/sample-rollout-log\n")
+        archive = self.text("archive/sample-rollout-log")
+        self.assertIn("domain: payments\n", archive)
+        self.assertIn("status: open\n", archive)
+        self.assertIn("logged_on: 2026-01-08\n", archive)
+        self.assertEqual(self.run_ctx("validate")[0], 0)
+        self.assertEqual(self.run_ctx("maintain"), (0, "ok: nothing to do\n", ""))
+
+    def test_a_field_with_no_derivable_default_is_refused(self):
+        self.schema("log", {"frontmatter": {"owner": {"required": True}}, "log": {}})
+        self.big_log()
+        before = self.text(EPIC)
+        self.assertEqual(self.run_ctx("maintain"),
+                         (0, "archive: archive/sample-rollout-log — cannot create, owner required\n", ""))
+        self.assertFalse(os.path.exists(self.path("archive/sample-rollout-log")))
+        self.assertEqual(self.text(EPIC), before)
+        self.assertEqual(self.run_ctx("validate")[0], 0)
+
+
 class Git(UpkeepCase):
     def git(self, *args):
         env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com", "GIT_COMMITTER_NAME": "t",

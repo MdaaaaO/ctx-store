@@ -523,7 +523,15 @@ A second run changes nothing.
    section; with `log` rules but no `section`, into its body-level dated
    list; with no `log` rules, into a `## Log` section; `log.order`
    `newest-first` puts the moved block at the top, newest first,
-   `oldest-first` (default) at the end, oldest first, as they are kept.
+   `oldest-first` (default) at the end, oldest first, as they are kept. A
+   freshly created archive doc carries `title`, `type`, `updated` plus a
+   reasonable default for every other field its type requires: `domain`
+   copied from the source doc, a field's `const`, an enum field's first
+   value, today's date for a `date` field — the first of these the field's
+   rule accepts, so a source `domain` outside the rule's enum falls back to
+   the enum. A required field with no derivable default is reported as
+   `archive: <target> — cannot create, <field> required` and that tail is
+   left alone: nothing is written to either doc.
 2. Sessions: a session doc with `status: ended` and a heartbeat older than
    `session_days` (default 7) moves to `session_archive` (default
    `sessions/archive/{name}`), links to it rewritten; its audit rows are put

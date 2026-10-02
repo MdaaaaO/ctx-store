@@ -6,6 +6,7 @@ import time
 
 from . import frontmatter, sections
 from .contract import CtxError, Findings
+from .store import _field_problem
 from .verbs import SIZE_GUARD, _clock
 
 KEEP_LOG = 20
@@ -111,6 +112,28 @@ def _seconds(stamp):
     return calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))
 
 
+def _archive_defaults(store, type_name, source, date):
+    """Required fields of a fresh archive doc beyond the fixed template
+    (title, type, updated, schema_version), each given a reasonable default:
+    `domain` from the source doc, a `const`, an enum's first value, today's
+    date for a `date` field; the first candidate the field's rule accepts
+    wins. (fields, None) or (fields so far, the first field with no
+    derivable default)."""
+    fixed = {"title", "type", "updated", "schema_version"}
+    fields = {}
+    for field, rule in store.types.get(type_name, {}).get("frontmatter", {}).items():
+        if field in fixed or not rule.get("required"):
+            continue
+        candidates = [source.fields.get("domain")] if field == "domain" else []
+        candidates += [rule.get("const"), (rule.get("enum") or [None])[0]]
+        candidates += [date] if rule.get("kind") == "date" else []
+        value = next((value for value in candidates if isinstance(value, str) and not _field_problem(value, rule)), None)
+        if value is None:
+            return fields, field
+        fields[field] = value
+    return fields, None
+
+
 def _archive_logs(store, rules, config, now, date, report):
     guard, keep = rules.get("size_guard", SIZE_GUARD), rules.get("keep_log", KEEP_LOG)
     pattern = rules.get("archive", "archive/{slug}-log")
@@ -139,14 +162,21 @@ def _archive_logs(store, rules, config, now, date, report):
         archive_log = store.types.get(archive_type or "log", {}).get("log")
         section = "Log" if archive_log is None else archive_log.get("section")
         archive_newest = archive_log is not None and archive_log.get("order") == "newest-first"
+        type_name = archive_type or "log"
+        extra, missing = ({}, None) if store.has(target) else _archive_defaults(store, type_name, doc, date)
+        if missing:
+            report.append(f"archive: {target} — cannot create, {missing} required")
+            continue
 
-        def extend(current, moved=moved, key=key, section=section, archive_newest=archive_newest):
+        def extend(current, moved=moved, key=key, section=section, archive_newest=archive_newest,
+                   type_name=type_name, extra=extra):
             if current is None:
                 title = f"# Log of {key}\n"
-                current = (f"---\ntitle: Log of {key}\ntype: log\nupdated: {date}\n---\n\n"
+                head_fields = "".join(f"{field}: {value}\n" for field, value in extra.items())
+                current = (f"---\ntitle: Log of {key}\ntype: {type_name}\n{head_fields}updated: {date}\n---\n\n"
                            + (title + "\n## " + section + "\n" if section else title))
-                if store.stamp("log"):
-                    current = frontmatter.set_field(current, "schema_version", store.stamp("log"))
+                if store.stamp(type_name):
+                    current = frontmatter.set_field(current, "schema_version", store.stamp(type_name))
             body = frontmatter.split(current)[1]
             for line in moved:
                 if section and archive_newest:

@@ -33,6 +33,39 @@ jobs:
           copy/ctx --version
           copy/ctx doctor --store copy/tests/fixtures/store-v1
 
+  # What PyPI gets: the package builds without a warning, its README renders, and the installed wheel runs
+  # outside the checkout. The release workflow builds the same way from the tag.
+  wheel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Build without warnings
+        run: |
+          uv build > "$RUNNER_TEMP/build.log" 2>&1 || { cat "$RUNNER_TEMP/build.log"; exit 1; }
+          cat "$RUNNER_TEMP/build.log"
+          if grep -i warning "$RUNNER_TEMP/build.log"; then
+            echo "::error::uv build printed a warning"
+            exit 1
+          fi
+      - name: Metadata and README render on PyPI
+        run: uvx --from 'twine>=6,<7' twine check --strict dist/*
+      - name: The installed wheel runs outside the checkout
+        run: |
+          uv venv "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv/bin/python" dist/*.whl
+          cd "$RUNNER_TEMP"
+          read -r _ got _ < <(venv/bin/ctx --version)
+          test "$got" = "$(cat "$GITHUB_WORKSPACE/ctxstore/VERSION")"
+          venv/bin/ctx doctor --store "$GITHUB_WORKSPACE/tests/fixtures/store-v1"
+          venv/bin/ctx help errors > /dev/null
+          # ctx-serve takes no arguments: it prints its usage and exits 1 (no pipe, so pipefail is moot)
+          usage=$(venv/bin/ctx-serve --help 2>&1) && exit 1
+          grep "^usage: ctx-serve" <<< "$usage"
+
   container:
     runs-on: ubuntu-latest
     timeout-minutes: 10

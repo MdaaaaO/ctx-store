@@ -18,6 +18,17 @@ The interface is the contract: verbs, fixed errors and the doc model. Storage is
 Markdown files are the default backend, so a store stays a folder you can read and edit; the same calls
 give the same answers on any other backend (`ctxstore/backend.py`, `ctx help backends`).
 
+## Install
+
+```sh
+uv tool install ctx-store     # or: pipx install ctx-store
+ctx --version
+```
+
+The package puts `ctx` and `ctx-serve` on the `PATH`: Python ≥ 3.10, no dependencies. Installing is optional,
+since a plain copy of the repo runs as it is (below). Releases: [PyPI](https://pypi.org/project/ctx-store/),
+[`CHANGELOG.md`](https://github.com/MdaaaaO/ctx-store/blob/main/CHANGELOG.md).
+
 ## Try it
 
 ```sh
@@ -27,8 +38,8 @@ git clone https://github.com/MdaaaaO/ctx-store && cd ctx-store
 ./ctx help errors
 ```
 
-No install step: `ctx` runs from a plain copy of the repo on Python ≥ 3.10. The interface (verbs, exit
-codes, error strings, `--json` envelope, environment) is [`docs/interface.md`](docs/interface.md);
+No install needed: `ctx` runs from a plain copy of the repo on Python ≥ 3.10. The interface (verbs, exit
+codes, error strings, `--json` envelope, environment) is [`docs/interface.md`](https://github.com/MdaaaaO/ctx-store/blob/main/docs/interface.md);
 `ctx help` prints from the same file. Tests: `make ci`.
 
 ## Hooks
@@ -78,7 +89,7 @@ Anthropic's memory tool on stdin.
 ## claude.ai
 
 `ctx-serve` puts the same tools behind HTTP with authentication (OAuth for claude.ai, a bearer token for
-Claude Code), for a store on your machine behind a tunnel: [`docs/connector.md`](docs/connector.md). It is
+Claude Code), for a store on your machine behind a tunnel: [`docs/connector.md`](https://github.com/MdaaaaO/ctx-store/blob/main/docs/connector.md). It is
 a separate package; the core has no network.
 
 ## Speed

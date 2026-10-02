@@ -1,16 +1,27 @@
 name: release
 
 # The CI half of a release (CONTRIBUTING.md § Releases). On a push to main whose commit is a squash-merged
-# `chore(release): X.Y.Z`: check ctxstore/VERSION agrees, tag that commit vX.Y.Z and publish a GitHub Release
-# whose notes are the version's CHANGELOG.md section. Any other commit: the job is skipped.
+# `chore(release): X.Y.Z`: check ctxstore/VERSION agrees, tag that commit vX.Y.Z, publish a GitHub Release
+# whose notes are the version's CHANGELOG.md section, then build the package from the tag and publish it to
+# PyPI as `ctx-store`. Any other commit: every job is skipped.
 # Self-healing: each step does only what is missing, so re-running a failed run finishes a half-done release —
-# tag pushed but no Release: the Release is created from the existing tag; both there: a no-op.
-# Runs on GitHub-hosted runners like every workflow; only on a push to main, i.e. code that was already merged.
-# Nothing is published to a package index: ctx runs from a copy of the repo at a tag.
+# tag pushed but no Release: the Release is created from the existing tag; both there: a no-op; already on
+# PyPI: the upload skips the files PyPI has (skip-existing).
+# workflow_dispatch with `version` publishes an existing tag vX.Y.Z to PyPI (backfill, a retry): build + pypi
+# only, no tag and no GitHub Release.
+# PyPI trusted publishing (OIDC): the `pypi` job alone gets `id-token: write`, in the `pypi` environment, which
+# deploys from main only; PyPI trusts this repo + release.yml + that environment. No token secret.
+# Runs on GitHub-hosted runners like every workflow; only on main: a push is code that was already merged.
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing release to publish to PyPI: X.Y.Z (its tag vX.Y.Z must exist)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -24,11 +35,14 @@ jobs:
     name: tag
     # Only a release commit gets the checkout, uv and detect; detect still decides (subject + VERSION).
     # A re-run keeps the original push payload, so this holds for re-runs too.
-    if: startsWith(github.event.head_commit.message, 'chore(release):')
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write  # push the tag, create the release
+    outputs:
+      # The version whose tag is on this commit (new or from an earlier attempt); empty: nothing to publish.
+      version: ${{ steps.detect.outputs.tag != '' && steps.detect.outputs.version || '' }}
     env:
       TOOL: conventional-release>=0.3.1,<1  # 0.3.1: publish-release; detect names a tag already on HEAD
     steps:
@@ -60,3 +74,75 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.detect.outputs.version }}
         run: uvx --from "$TOOL" conventional-release publish-release "$VERSION"
+
+  build:
+    name: build
+    needs: tag
+    # A dispatch skips `tag`, so this job says itself when to run: after a `tag` that left a tagged release
+    # commit, or on a dispatch.
+    if: >-
+      !cancelled() &&
+      (github.event_name == 'workflow_dispatch' || (needs.tag.result == 'success' && needs.tag.outputs.version != ''))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ inputs.version || needs.tag.outputs.version }}
+    steps:
+      - name: The version is X.Y.Z
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must be X.Y.Z, got '$VERSION'"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/v${{ env.VERSION }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: false  # the published files are built from nothing a cache could carry in
+
+      - name: Build
+        run: |
+          test "$(cat ctxstore/VERSION)" = "$VERSION"
+          uv build
+          ls dist/ctx_store-"$VERSION".tar.gz dist/ctx_store-"$VERSION"-py3-none-any.whl
+
+      # The wheel as a user gets it: a fresh venv, outside the checkout.
+      - name: The installed wheel reports VERSION
+        run: |
+          uv venv "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv/bin/python" dist/*.whl
+          cd "$RUNNER_TEMP"
+          read -r _ got _ < <(venv/bin/ctx --version)
+          test "$got" = "$VERSION"
+          # ctx-serve takes no arguments: it prints its usage and exits 1 (no pipe, so pipefail is moot)
+          usage=$(venv/bin/ctx-serve --help 2>&1) && exit 1
+          grep "^usage: ctx-serve" <<< "$usage"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  pypi:
+    name: pypi
+    needs: build
+    # `build` may run after a skipped `tag` (a dispatch); the default success() would skip this job then.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ctx-store
+    permissions:
+      id-token: write  # trusted publishing; nothing else
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          skip-existing: true

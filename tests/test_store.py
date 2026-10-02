@@ -524,6 +524,53 @@ class Brief(StoreCase):
         self.assertEqual([line.split(" · ")[0] for line in lines[1:4]], ["- alpha-rollout", "- beta-docs", "- by-type"])
         self.assertEqual(self.run_ctx("touch", "--session", "by-type")[0], 0)
 
+    def test_fields(self):
+        out = self.run_ctx("brief", "sessions/alpha-rollout", "--fields", "session,epic,working_on")[1].split("\n")
+        self.assertEqual(out[:4], ["sessions/alpha-rollout (session, 192 bytes)",
+                                   "session: alpha-rollout", "epic: EX-1", "working_on: region three"])
+        self.assertEqual(out[4], "sections: Notes (20)")  # the rest of the line-up is untouched
+        self.assertNotIn("status: active", out)
+        # unknown keys are skipped silently; order is the caller's
+        out = self.run_ctx("brief", "sessions/alpha-rollout", "--fields", "epic,nope,session")[1].split("\n")
+        self.assertEqual(out[:3], ["sessions/alpha-rollout (session, 192 bytes)", "epic: EX-1", "session: alpha-rollout"])
+        # a repeated key prints once, at its first place
+        out = self.run_ctx("brief", "sessions/alpha-rollout", "--fields", "epic,session,epic")[1].split("\n")
+        self.assertEqual(out[:4], ["sessions/alpha-rollout (session, 192 bytes)", "epic: EX-1", "session: alpha-rollout",
+                                   "sections: Notes (20)"])
+
+    def test_no_frontmatter(self):
+        out = self.run_ctx("brief", "--session", "sid-alpha", "--no-frontmatter")[1].split("\n")
+        self.assertEqual(out, ["sessions/alpha-rollout (session, 192 bytes)", "sections: Notes (20)", "",
+                               "# Session: alpha-rollout", "", "## Notes", "Owns the EX-1 lane.", ""])
+
+    def test_sections(self):
+        self.put("sessions/multi", (
+            "---\nsession: multi\nsession_id: sid-multi\nstatus: active\n---\n\n# Session: multi\n\n"
+            "## Notes\nBackground.\n\n## Open PRs\n- #10\n\n## Open decisions\n- pick a store\n"))
+        out = self.run_ctx("brief", "--session", "sid-multi", "--sections", "Open PRs,Open decisions")[1].split("\n")
+        summary = next(line for line in out if line.startswith("sections:"))
+        self.assertEqual([part.split(" (")[0] for part in summary[len("sections: "):].split(" · ")],
+                         ["Open PRs", "Open decisions", "Notes"])
+        self.assertEqual([line[3:] for line in out if line.startswith("## ")], ["Open PRs", "Open decisions", "Notes"])
+        self.assertEqual(out[out.index("## Open PRs") + 1], "- #10")
+        self.assertEqual(out[out.index("## Open decisions") + 1], "- pick a store")
+        # a repeated heading moves its section once
+        out = self.run_ctx("brief", "--session", "sid-multi", "--sections", "Open PRs,Open PRs")[1].split("\n")
+        self.assertEqual([line[3:] for line in out if line.startswith("## ")], ["Open PRs", "Notes", "Open decisions"])
+        # an unknown heading and an ambiguous (repeated) one are skipped silently
+        self.put("sessions/dup", self.text("sessions/multi").replace("session: multi", "session: dup")
+                 .replace("sid-multi", "sid-dup") + "\n## Notes\nSecond.\n")
+        out = self.run_ctx("brief", "--session", "sid-dup", "--sections", "Notes,Open decisions,Nope")[1].split("\n")
+        self.assertEqual([line[3:] for line in out if line.startswith("## ")],
+                         ["Open decisions", "Notes", "Open PRs", "Notes"])
+
+    def test_fields_and_sections_usage(self):
+        self.fails(self.run_ctx("brief", EPIC, "--fields", "title", "--no-frontmatter"), 1,
+                   "USAGE --fields: bad command line")
+        self.fails(self.run_ctx("brief", "--registry", "--fields", "title"), 1, "USAGE --fields: bad command line")
+        self.fails(self.run_ctx("brief", "--registry", "--no-frontmatter"), 1, "USAGE --no-frontmatter: bad command line")
+        self.fails(self.run_ctx("brief", "--registry", "--sections", "Goal"), 1, "USAGE --sections: bad command line")
+
     def test_usage(self):
         self.fails(self.run_ctx("brief"), 1, "USAGE brief: bad command line")
         self.fails(self.run_ctx("brief", EPIC, "--registry"), 1, "USAGE brief: bad command line")

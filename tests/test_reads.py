@@ -552,6 +552,10 @@ class Mcp(StoreCase):
             "actor instead of the server's; the store's settings must allow the name (`mcp.actors`)."))
         self.assertEqual([name for name, tool in sorted(tools.items()) if "actor" not in tool["inputSchema"]["properties"]],
                          ["ctx_brief", "ctx_doctor", "ctx_find", "ctx_get", "ctx_resolve", "ctx_view"])
+        # the frontmatter allow-list and section order CLI gained are offered over MCP too
+        self.assertEqual({name: prop["type"] for name, prop in tools["ctx_brief"]["inputSchema"]["properties"].items()
+                          if name in ("fields", "no-frontmatter", "sections")},
+                         {"fields": "string", "no-frontmatter": "boolean", "sections": "string"})
         self.assertTrue(tools["ctx_rename"]["description"].startswith("ctx rename <doc> <to>"))
         self.assertIn("in order: doc, to.", tools["ctx_rename"]["description"])
         self.assertNotIn("Over MCP", tools["ctx_doctor"]["description"])
@@ -559,6 +563,15 @@ class Mcp(StoreCase):
         self.assertTrue(tools["ctx_get"]["description"].startswith("ctx get <doc>[,<doc>…]"))
         self.assertEqual(self.talk(self.request(1, "initialize", protocolVersion="1999-01-01"))[0]["result"]["protocolVersion"],
                          "2025-11-25")
+
+    def test_brief_fields_and_sections(self):
+        reply, = self.talk(self.tool(1, "ctx_brief", session="sid-alpha", fields="session,epic", sections="Notes"))
+        self.assertEqual(reply["result"], {"isError": False, "content": [{"type": "text", "text": (
+            "sessions/alpha-rollout (session, 192 bytes)\nsession: alpha-rollout\nepic: EX-1\n"
+            "sections: Notes (20)\n\n# Session: alpha-rollout\n\n## Notes\nOwns the EX-1 lane.")}]})
+        reply, = self.talk(self.tool(2, "ctx_brief", registry=True, **{"no-frontmatter": True}))
+        self.assertTrue(reply["result"]["isError"])
+        self.assertEqual(reply["result"]["content"][0]["text"], "USAGE --no-frontmatter: bad command line")
 
     def test_brief_find_and_log(self):
         brief, find, log, tail = self.talk(

@@ -376,6 +376,7 @@ ctx move <doc> <to>
 ### brief
 
 ctx brief <doc> [--links] [--near] | --registry | --session <id> [--budget <bytes>] [--full]
+          [--fields <k>[,<k>…] | --no-frontmatter] [--sections <h>[,<h>…]]
 
 The cold-start read, within a byte budget (default 4096; above 8192 needs
 `--full`). What does not fit is replaced by one line that says how much is
@@ -392,6 +393,15 @@ missing.
 - `--registry`: one line per session that has not ended: name, status, epic,
   what it is working on, heartbeat.
 - `--session <id>`: that session's doc, as for `<doc>`, then its body.
+- `--fields <k>[,<k>…]`: only those frontmatter keys, in that order, instead
+  of every field. `--no-frontmatter`: none of them. Not with `--registry`
+  (there is no one doc's frontmatter to choose from); together with each
+  other, `USAGE --fields`.
+- `--sections <h>[,<h>…]`: those `##` headings first, in that order, then
+  the rest as they fall in the doc — in the sections summary, and in the
+  body a session's brief prints. Not with `--registry`. Unknown or
+  ambiguous (repeated) headings are skipped silently: the doc may lack them.
+- In both lists a name given twice counts once, at its first place.
 
 Exit 0; 2 `NO_SUCH_DOC`; 3 `AMBIGUOUS_SELECTOR`.
 

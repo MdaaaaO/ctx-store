@@ -577,8 +577,8 @@ templates to what a consumer hands over. The store is the one path of
 parents are created. Another backend, or a list of stores, is `USAGE`; no
 store named is `STORE_NOT_NAMED`.
 
-- `--settings`: a JSON object of `generated`, `ignore`, `resolve` and
-  `maintain` (`ctx help stores`), and `schema_version` if given the current
+- `--settings`: a JSON object of `generated`, `ignore`, `resolve`, `maintain`
+  and `mcp` (`ctx help stores`), and `schema_version` if given the current
   one, 1. It becomes `ctx-store.json`. Without it a new store gets
   `{"schema_version": 1}` and an existing one keeps its marker.
 - `--types`: a folder of `<type>.json` schemas, copied to `.ctx/types/`.

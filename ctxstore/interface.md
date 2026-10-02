@@ -517,7 +517,9 @@ A second run changes nothing.
    freshly created archive doc carries `title`, `type`, `updated` plus a
    reasonable default for every other field its type requires: `domain`
    copied from the source doc, an enum field's first value, today's date for
-   a `date` field. A required field with no derivable default is reported as
+   a `date` field — the first of these the field's rule accepts, so a source
+   `domain` outside the rule's enum falls back to the enum. A required field
+   with no derivable default is reported as
    `archive: <target> — cannot create, <field> required` and that tail is
    left alone: nothing is written to either doc.
 2. Sessions: a session doc with `status: ended` and a heartbeat older than

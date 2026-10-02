@@ -476,6 +476,16 @@ class ArchiveDocValidates(UpkeepCase):
         self.assertEqual(self.text(EPIC), before)
         self.assertEqual(self.run_ctx("validate")[0], 0)
 
+    def test_a_source_domain_outside_the_enum_falls_back(self):
+        self.schema("log", {"frontmatter": {"domain": {"required": True, "enum": ["archive", "payments"]}},
+                            "log": {}})
+        self.put(EPIC, self.text(EPIC).replace("status: active\n", "status: active\ndomain: billing\n"))
+        self.big_log()
+        self.assertEqual(self.run_ctx("maintain")[1],
+                         "archived: 20 log entries of epics/sample-rollout → archive/sample-rollout-log\n")
+        self.assertIn("domain: archive\n", self.text("archive/sample-rollout-log"))
+        self.assertEqual(self.run_ctx("validate")[0], 0)
+
 
 class Git(UpkeepCase):
     def git(self, *args):

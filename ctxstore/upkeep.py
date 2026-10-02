@@ -6,6 +6,7 @@ import time
 
 from . import frontmatter, sections
 from .contract import CtxError, Findings
+from .store import _field_problem
 from .verbs import SIZE_GUARD, _clock
 
 KEEP_LOG = 20
@@ -115,21 +116,21 @@ def _archive_defaults(store, type_name, source, date):
     """Required fields of a fresh archive doc beyond the fixed template
     (title, type, updated, schema_version), each given a reasonable default:
     `domain` from the source doc, an enum's first value, today's date for a
-    `date` field. (fields, None) or (fields so far, the first field with no
-    derivable default)."""
+    `date` field; the first candidate the field's rule accepts wins.
+    (fields, None) or (fields so far, the first field with no derivable
+    default)."""
     fixed = {"title", "type", "updated", "schema_version"}
     fields = {}
     for field, rule in store.types.get(type_name, {}).get("frontmatter", {}).items():
         if field in fixed or not rule.get("required"):
             continue
-        if field == "domain" and isinstance(source.fields.get("domain"), str) and source.fields["domain"]:
-            fields[field] = source.fields["domain"]
-        elif rule.get("enum"):
-            fields[field] = rule["enum"][0]
-        elif rule.get("kind") == "date":
-            fields[field] = date
-        else:
+        candidates = [source.fields.get("domain")] if field == "domain" else []
+        candidates += [rule.get("const"), (rule.get("enum") or [None])[0]]
+        candidates += [date] if rule.get("kind") == "date" else []
+        value = next((value for value in candidates if isinstance(value, str) and not _field_problem(value, rule)), None)
+        if value is None:
             return fields, field
+        fields[field] = value
     return fields, None
 
 

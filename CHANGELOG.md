@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file. Generated b
 [conventional-release](https://github.com/MdaaaaO/conventional-release) from
 [Conventional Commits](https://www.conventionalcommits.org).
 
+## 0.7.0 (2026-10-02)
+
+
+### Features
+
+* **core:** brief takes a field allow-list and a section order (#75) ([#78](https://github.com/MdaaaaO/ctx-store/issues/78)) ([0b57eba](https://github.com/MdaaaaO/ctx-store/commit/0b57ebaca9d3942dce29e2f999f73f84828606db))
+
+
+### Bug Fixes
+
+* **core:** init --settings accepts the mcp key (#73) ([#76](https://github.com/MdaaaaO/ctx-store/issues/76)) ([83be069](https://github.com/MdaaaaO/ctx-store/commit/83be069ca527340822a8b573d9b7b3cdc93f4d6a))
+* **core:** maintain creates an archive doc that validates (#74) ([#77](https://github.com/MdaaaaO/ctx-store/issues/77)) ([e3fb7fd](https://github.com/MdaaaaO/ctx-store/commit/e3fb7fd5018d0b557c168e07112dd199f30e1a80))
+
 ## 0.6.0 (2026-09-30)
 
 

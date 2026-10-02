@@ -193,8 +193,9 @@ def _fit(lines, budget, what="lines"):
 
 def _csv(raw):
     """A `--fields`/`--sections` value split on commas, trimmed, emptied of
-    blanks. `None` stays `None` (the option was not given)."""
-    return None if raw is None else [part.strip() for part in raw.split(",") if part.strip()]
+    blanks and of repeats (the first place wins). `None` stays `None` (the
+    option was not given)."""
+    return None if raw is None else list(dict.fromkeys(part.strip() for part in raw.split(",") if part.strip()))
 
 
 def _moved_body(body, moved):

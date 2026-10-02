@@ -533,6 +533,10 @@ class Brief(StoreCase):
         # unknown keys are skipped silently; order is the caller's
         out = self.run_ctx("brief", "sessions/alpha-rollout", "--fields", "epic,nope,session")[1].split("\n")
         self.assertEqual(out[:3], ["sessions/alpha-rollout (session, 192 bytes)", "epic: EX-1", "session: alpha-rollout"])
+        # a repeated key prints once, at its first place
+        out = self.run_ctx("brief", "sessions/alpha-rollout", "--fields", "epic,session,epic")[1].split("\n")
+        self.assertEqual(out[:4], ["sessions/alpha-rollout (session, 192 bytes)", "epic: EX-1", "session: alpha-rollout",
+                                   "sections: Notes (20)"])
 
     def test_no_frontmatter(self):
         out = self.run_ctx("brief", "--session", "sid-alpha", "--no-frontmatter")[1].split("\n")
@@ -550,6 +554,9 @@ class Brief(StoreCase):
         self.assertEqual([line[3:] for line in out if line.startswith("## ")], ["Open PRs", "Open decisions", "Notes"])
         self.assertEqual(out[out.index("## Open PRs") + 1], "- #10")
         self.assertEqual(out[out.index("## Open decisions") + 1], "- pick a store")
+        # a repeated heading moves its section once
+        out = self.run_ctx("brief", "--session", "sid-multi", "--sections", "Open PRs,Open PRs")[1].split("\n")
+        self.assertEqual([line[3:] for line in out if line.startswith("## ")], ["Open PRs", "Notes", "Open decisions"])
         # an unknown heading and an ambiguous (repeated) one are skipped silently
         self.put("sessions/dup", self.text("sessions/multi").replace("session: multi", "session: dup")
                  .replace("sid-multi", "sid-dup") + "\n## Notes\nSecond.\n")

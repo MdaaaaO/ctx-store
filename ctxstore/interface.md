@@ -401,6 +401,7 @@ missing.
   the rest as they fall in the doc — in the sections summary, and in the
   body a session's brief prints. Not with `--registry`. Unknown or
   ambiguous (repeated) headings are skipped silently: the doc may lack them.
+- In both lists a name given twice counts once, at its first place.
 
 Exit 0; 2 `NO_SUCH_DOC`; 3 `AMBIGUOUS_SELECTOR`.
 

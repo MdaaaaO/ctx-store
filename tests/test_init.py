@@ -147,12 +147,34 @@ class Init(unittest.TestCase):
     def test_bad_settings_create_nothing(self):
         settings = os.path.join(self.work.name, "settings.json")
         cases = (('{"schema_version": 1, "colour": true}', "colour"), ('{"schema_version": 2}', "schema_version"),
-                 ('{"ignore": "README.md"}', settings), ("[]", settings), ("{", settings))
+                 ('{"ignore": "README.md"}', settings), ("[]", settings), ("{", settings),
+                 ('{"schema_version": 1, "mcp": {"actors": "("}}', settings))
         for text, detail in cases:
             self.write(settings, text)
             code, out, err = self.run_ctx("init", "--settings", settings, "--types", self.types)
             self.assertEqual((code, err), (3, f"SCHEMA_VIOLATION {detail}: schema violation\n"), text)
             self.assertFalse(os.path.exists(os.path.dirname(self.store)))
+
+    def test_settings_accepts_mcp(self):
+        """#73: `mcp` (an MCP actor pattern) joins the keys `init --settings`
+        accepts, checked as `check_settings` already checks it for a store open."""
+        settings = os.path.join(self.work.name, "settings.json")
+        self.write(settings, '{"schema_version": 1, "mcp": {"actors": "^[a-z0-9-]+$"}}')
+        code, out, err = self.run_ctx("init", "--settings", settings, "--types", self.types)
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(json.loads(self.read("ctx-store.json")),
+                         {"schema_version": 1, "mcp": {"actors": "^[a-z0-9-]+$"}})
+        # --upgrade replaces the marker like any other init-written file: no spurious `kept:`
+        code, out, _ = self.run_ctx("init", "--settings", settings, "--types", self.types, "--upgrade")
+        self.assertEqual(code, 0)
+        self.assertIn("unchanged: ctx-store.json\n", out)
+        self.assertNotIn("kept: ctx-store.json", out)
+        self.write(settings, '{"schema_version": 1, "mcp": {"actors": "^[a-z]+$"}}')
+        code, out, _ = self.run_ctx("init", "--settings", settings, "--types", self.types, "--upgrade")
+        self.assertEqual(code, 0)
+        self.assertIn("written: ctx-store.json\n", out)
+        self.assertEqual(json.loads(self.read("ctx-store.json")),
+                         {"schema_version": 1, "mcp": {"actors": "^[a-z]+$"}})
 
     def test_bad_schema_writes_nothing(self):
         self.write(os.path.join(self.types, "zeta.json"), '{"sections": "Goal"}')

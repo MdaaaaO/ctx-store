@@ -12,7 +12,7 @@ from .store import _check_schema, _seq, digest
 from .verbs import _clock
 
 NAME = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
-KEYS = ("schema_version", *SETTINGS, "resolve", "maintain")
+KEYS = ("schema_version", *SETTINGS, "resolve", "maintain", "mcp")
 
 
 def _marker(data):

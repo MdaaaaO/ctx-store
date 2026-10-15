@@ -3,12 +3,19 @@
 # Runs after `ci`, `pr-title` or `claude-review` completes on a PR head (`workflow_run`, so it is always the
 # copy on main that runs, never the PR's). It merges when ALL of these hold for the PR whose head is that sha:
 #   - open, not a draft, from a branch of this repo, based on main;
-#   - every check in REQUIRED completed with success on the head (a skipped claude-review — release PRs,
-#     no token — is not success: those PRs wait for the owner);
+#   - every check in REQUIRED completed with success on the head (a skipped claude-review — no token —
+#     is not success: the PR waits for the owner);
 #   - the latest review by REVIEWER is APPROVED and was submitted for this exact head (claude-review.yml
 #     turns the reviewer's `Verdict:` line into that review; a push after it means no verdict yet);
 #   - zero unresolved review threads (CONTRIBUTING.md § Review: threads are not optional);
 #   - GitHub reports the PR mergeable.
+# Two kinds of PR get no review by design (claude-review.yml skips them) and merge on the other gates alone,
+# when their shape is exactly what the tool that made them writes — any other shape waits for the owner:
+#   - a release PR: by the repository owner, titled `chore(release): X.Y.Z`, changing exactly CHANGELOG.md
+#     and ctxstore/VERSION (conventional-release, CONTRIBUTING.md § Releases);
+#   - a dependabot bump: by dependabot[bot], titled `ci(deps): …`, every changed file under
+#     .github/workflows/, every changed line a `uses: owner/repo@<40-hex sha>` pin (a `# vN` comment may follow).
+# The shape comes from the author, the file list and the diff, never from the title alone: a title is free text.
 # Anything else is a notice, never a failure: the PR simply waits — for the next event or the owner.
 #
 # The merge uses AUTOMERGE_TOKEN (a fine-grained PAT of the owner: this repo, Contents + Pull requests
@@ -75,11 +82,34 @@ jobs:
           [ "$(wc -l <<< "$prs")" -eq 1 ] || skip "more than one open PR has this head ($(tr '\n' ' ' <<< "$prs"))"
           pr=$prs
 
+          # Unreviewed by design (header): a release PR or a dependabot bump of the exact shape its tool writes.
+          meta=$(gh api "repos/$REPO/pulls/$pr" --jq '"\(.user.login)\t\(.title)"') || skip "could not read PR #$pr"
+          author=${meta%%$'\t'*}; title=${meta#*$'\t'}
+          files=$(gh api --paginate "repos/$REPO/pulls/$pr/files?per_page=100") || skip "could not list the files of PR #$pr"
+          unreviewed=""
+          if [[ "$title" == "chore(release): "* ]]; then
+            [ "$author" = "${REPO%/*}" ] || skip "release PR #$pr is by $author, not the owner — waiting for the owner"
+            [ "$(jq -r '.[].filename' <<< "$files" | sort | tr '\n' ' ')" = "CHANGELOG.md ctxstore/VERSION " ] \
+              || skip "release PR #$pr changes more than CHANGELOG.md and ctxstore/VERSION — waiting for the owner"
+            unreviewed="release PR"
+          elif [ "$author" = "dependabot[bot]" ]; then
+            [[ "$title" == "ci(deps): "* ]] || skip "dependabot PR #$pr is not a ci(deps) bump — waiting for the owner"
+            other=$(jq -r '.[].filename' <<< "$files" | grep -vE '^\.github/workflows/[^/]+\.ya?ml$' || true)
+            [ -z "$other" ] || skip "dependabot PR #$pr changes $(tr '\n' ' ' <<< "$other")— not only workflows, waiting for the owner"
+            # A file's patch is absent when GitHub finds the diff too large: that counts as a changed line too.
+            other=$(jq -r '.[] | .patch // "+(no patch)"' <<< "$files" | grep -E '^[+-]' \
+                      | grep -vE '^[+-] *(- )?uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}( +#.*)?$' || true)
+            [ -z "$other" ] || skip "dependabot PR #$pr changes lines other than uses: pins — waiting for the owner"
+            unreviewed="dependabot bump"
+          fi
+          [ -z "$unreviewed" ] || echo "auto-merge: PR #$pr is a $unreviewed — no reviewer verdict needed"
+
           runs=$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
                    --jq '.check_runs[] | "\(.name)\t\(.status)\t\(.conclusion)\t\(.completed_at // "9999")"') \
             || skip "could not list the check runs"
           IFS=',' read -ra required <<< "$REQUIRED"
           for name in "${required[@]}"; do
+            if [ -n "$unreviewed" ] && [ "$name" = claude-review ]; then continue; fi
             # One name can have several runs on a head: a job that other events also start, and that is
             # skipped for them, leaves skipped runs beside the one that ran. The run that counts is the
             # newest that was not skipped (one still running sorts last); only skipped runs means skipped.
@@ -91,13 +121,15 @@ jobs:
             [ "$conclusion" = success ] || skip "check '$name' concluded $conclusion — waiting for the owner"
           done
 
-          review=$(gh api --paginate "repos/$REPO/pulls/$pr/reviews?per_page=100" \
-                     --jq '.[] | select(.user.login == env.REVIEWER) | "\(.submitted_at)\t\(.commit_id)\t\(.state)"' \
-                   | sort | tail -1) || skip "could not list the reviews"
-          [ -n "$review" ] || skip "no review by $REVIEWER yet"
-          [ "$(cut -f2 <<< "$review")" = "$SHA" ] || skip "the latest $REVIEWER review is for another head"
-          state=$(cut -f3 <<< "$review")
-          [ "$state" = APPROVED ] || skip "the latest $REVIEWER review is $state — waiting for the owner"
+          if [ -z "$unreviewed" ]; then
+            review=$(gh api --paginate "repos/$REPO/pulls/$pr/reviews?per_page=100" \
+                       --jq '.[] | select(.user.login == env.REVIEWER) | "\(.submitted_at)\t\(.commit_id)\t\(.state)"' \
+                     | sort | tail -1) || skip "could not list the reviews"
+            [ -n "$review" ] || skip "no review by $REVIEWER yet"
+            [ "$(cut -f2 <<< "$review")" = "$SHA" ] || skip "the latest $REVIEWER review is for another head"
+            state=$(cut -f3 <<< "$review")
+            [ "$state" = APPROVED ] || skip "the latest $REVIEWER review is $state — waiting for the owner"
+          fi
 
           threads=$(gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){
                       pullRequest(number:$n){reviewThreads(first:100){totalCount nodes{isResolved}}}}}' \
@@ -116,7 +148,7 @@ jobs:
           done
           [ "${mergeable% *}" = true ] || skip "PR #$pr is not mergeable ($mergeable)"
 
-          echo "auto-merge: PR #$pr — checks green, $REVIEWER approved this head, no open threads, mergeable"
+          echo "auto-merge: PR #$pr — checks green, ${unreviewed:-$REVIEWER approved this head}, no open threads, mergeable"
           out pr "$pr"
           out go true
 

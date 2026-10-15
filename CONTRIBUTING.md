@@ -23,8 +23,11 @@ lower-case description, no trailing period, at most 72 characters, the issue num
 
 The rules are [`docs/REVIEW.md`](docs/REVIEW.md). Answer and resolve every thread: an open thread
 blocks the merge. `@claude <question>` in a PR or issue comment gets an answer; `@claude review`
-asks for a review of the current head. A PR from a fork, a draft, a release PR and a PR that changes
-`claude-review.yml` get no automatic review and wait for the maintainer.
+asks for a review of the current head. A PR from a fork, a draft and a PR that changes
+`claude-review.yml` get no automatic review and wait for the maintainer. A release PR and a Dependabot
+bump get none either: `auto-merge` merges them on green CI alone when their shape is exactly what the
+tool wrote (the header of `.github/workflows/auto-merge.yml` says what it checks); any other shape waits
+for the maintainer too.
 
 ## Labels
 
@@ -38,18 +41,20 @@ asks for a review of the current head. A PR from a fork, a draft, a release PR a
 
 Releases are cut with [conventional-release](https://github.com/MdaaaaO/conventional-release). A
 release is a `chore(release): X.Y.Z` PR that adds the version's section to `CHANGELOG.md` and bumps
-`ctxstore/VERSION`. Squash-merge it with the title unchanged; the `release` workflow tags that commit
+`ctxstore/VERSION`. `auto-merge` squash-merges it once CI is green, the title unchanged; the `release` workflow tags that commit
 `vX.Y.Z`, publishes a GitHub Release, then builds the package from the tag, checks that the installed wheel
 reports the version and publishes it to [PyPI](https://pypi.org/project/ctx-store/) as `ctx-store`. A failed
 release job is re-run: each step does only what is missing, and the upload skips files PyPI already has.
 To publish an existing tag again (a failed upload, a backfill) without a new commit:
 `gh workflow run release.yml -f version=X.Y.Z` (or Actions → release → Run workflow). Release PRs need no
-issue and get no automatic review.
+issue and get no automatic review; one that changes anything but `CHANGELOG.md` and `ctxstore/VERSION`
+waits for the maintainer.
 
 ## Workflows and secrets
 
-Third-party actions are pinned by commit SHA; Dependabot proposes the bumps. Changes under
-`.github/workflows/` need the maintainer's review (`CODEOWNERS`).
+Third-party actions are pinned by commit SHA; Dependabot proposes the bumps, and `auto-merge` merges a
+bump on green CI when every changed line is a `uses:` pin. Other changes under `.github/workflows/` need
+the maintainer's review (`CODEOWNERS`).
 
 | Secret | Used by | Without it |
 |---|---|---|

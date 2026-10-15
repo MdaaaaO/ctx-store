@@ -16,6 +16,7 @@
 #   - a dependabot bump: by dependabot[bot], titled `ci(deps): …`, every changed file under
 #     .github/workflows/, every changed line a `uses: owner/repo@<40-hex sha>` pin (a `# vN` comment may follow).
 # The shape comes from the author, the file list and the diff, never from the title alone: a title is free text.
+# The rule is .github/scripts/pr-shape.py, run from main, with tests/test_pr_shape.py as its record.
 # Anything else is a notice, never a failure: the PR simply waits — for the next event or the owner.
 #
 # The merge uses AUTOMERGE_TOKEN (a fine-grained PAT of the owner: this repo, Contents + Pull requests
@@ -23,7 +24,8 @@
 # `ci`, `main-guard` and `release` would never run on main. Without the secret the job says so and stops.
 #
 # Runs on GitHub-hosted runners like every workflow. `workflow_run` always
-# executes the copy of this file on main, and the job checks out nothing — it reads PR metadata, never PR code.
+# executes the copy of this file on main, and the job checks out only .github/scripts from main — it reads
+# PR metadata, never PR code.
 name: auto-merge
 
 on:
@@ -65,6 +67,14 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Only the shape check comes from the checkout, and from main: on workflow_run GITHUB_SHA is the
+      # default branch's head, never the PR's.
+      - if: steps.token.outputs.enabled == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
       - id: gates
         if: steps.token.outputs.enabled == 'true'
         name: Every gate green on this head?
@@ -82,27 +92,16 @@ jobs:
           [ "$(wc -l <<< "$prs")" -eq 1 ] || skip "more than one open PR has this head ($(tr '\n' ' ' <<< "$prs"))"
           pr=$prs
 
-          # Unreviewed by design (header): a release PR or a dependabot bump of the exact shape its tool writes.
-          meta=$(gh api "repos/$REPO/pulls/$pr" --jq '"\(.user.login)\t\(.title)"') || skip "could not read PR #$pr"
-          author=${meta%%$'\t'*}; title=${meta#*$'\t'}
-          files=$(gh api --paginate "repos/$REPO/pulls/$pr/files?per_page=100") || skip "could not list the files of PR #$pr"
+          # Unreviewed by design (header): a release PR or a dependabot bump of the exact shape its tool
+          # writes. The rule is .github/scripts/pr-shape.py (tests/test_pr_shape.py); a wrong shape waits.
+          gh api "repos/$REPO/pulls/$pr" > pr.json || skip "could not read PR #$pr"
+          gh api --paginate "repos/$REPO/pulls/$pr/files?per_page=100" --jq '.[]' > files.jsonl \
+            || skip "could not list the files of PR #$pr"
+          kind=$(python3 .github/scripts/pr-shape.py "${REPO%/*}" pr.json files.jsonl 2> reason) \
+            || skip "PR #$pr: $(cat reason) — waiting for the owner"
           unreviewed=""
-          if [[ "$title" == "chore(release): "* ]]; then
-            [ "$author" = "${REPO%/*}" ] || skip "release PR #$pr is by $author, not the owner — waiting for the owner"
-            [ "$(jq -r '.[].filename' <<< "$files" | sort | tr '\n' ' ')" = "CHANGELOG.md ctxstore/VERSION " ] \
-              || skip "release PR #$pr changes more than CHANGELOG.md and ctxstore/VERSION — waiting for the owner"
-            unreviewed="release PR"
-          elif [ "$author" = "dependabot[bot]" ]; then
-            [[ "$title" == "ci(deps): "* ]] || skip "dependabot PR #$pr is not a ci(deps) bump — waiting for the owner"
-            other=$(jq -r '.[].filename' <<< "$files" | grep -vE '^\.github/workflows/[^/]+\.ya?ml$' || true)
-            [ -z "$other" ] || skip "dependabot PR #$pr changes $(tr '\n' ' ' <<< "$other")— not only workflows, waiting for the owner"
-            # A file's patch is absent when GitHub finds the diff too large: that counts as a changed line too.
-            other=$(jq -r '.[] | .patch // "+(no patch)"' <<< "$files" | grep -E '^[+-]' \
-                      | grep -vE '^[+-] *(- )?uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}( +#.*)?$' || true)
-            [ -z "$other" ] || skip "dependabot PR #$pr changes lines other than uses: pins — waiting for the owner"
-            unreviewed="dependabot bump"
-          fi
-          [ -z "$unreviewed" ] || echo "auto-merge: PR #$pr is a $unreviewed — no reviewer verdict needed"
+          [ "$kind" = review ] || unreviewed="$kind"
+          [ -z "$unreviewed" ] || echo "auto-merge: PR #$pr is a $unreviewed PR — no reviewer verdict needed"
 
           runs=$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
                    --jq '.check_runs[] | "\(.name)\t\(.status)\t\(.conclusion)\t\(.completed_at // "9999")"') \
@@ -148,7 +147,7 @@ jobs:
           done
           [ "${mergeable% *}" = true ] || skip "PR #$pr is not mergeable ($mergeable)"
 
-          echo "auto-merge: PR #$pr — checks green, ${unreviewed:-$REVIEWER approved this head}, no open threads, mergeable"
+          echo "auto-merge: PR #$pr — checks green, ${unreviewed:+$unreviewed PR (no review by design)}${unreviewed:-$REVIEWER approved this head}, no open threads, mergeable"
           out pr "$pr"
           out go true
 

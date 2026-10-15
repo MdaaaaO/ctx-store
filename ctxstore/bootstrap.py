@@ -6,13 +6,12 @@ import os.path
 import re
 
 from . import fs
-from .backend import SCHEMA_VERSION, SCHEME, SETTINGS, check_settings, open_store
+from .backend import SCHEMA_VERSION, SCHEME, check_settings, open_store
 from .contract import CtxError
 from .store import _check_schema, _seq, digest
 from .verbs import _clock
 
 NAME = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
-KEYS = ("schema_version", *SETTINGS, "resolve", "maintain", "mcp")
 
 
 def _marker(data):
@@ -21,15 +20,13 @@ def _marker(data):
 
 def _settings(path):
     """The marker a `--settings` file asks for, checked as a store checks its
-    marker when it is opened; a key the store does not know is refused too."""
+    marker when it is opened. A key the store does not know is the consumer's
+    own: it is written as given and no verb reads it."""
     try:
         data = json.loads(fs.read_payload(path))
     except ValueError:
         raise CtxError("SCHEMA_VIOLATION", path) from None
     if isinstance(data, dict):
-        for key in data:
-            if key not in KEYS:
-                raise CtxError("SCHEMA_VIOLATION", key)
         version = data.setdefault("schema_version", SCHEMA_VERSION)
         if type(version) is not int or version != SCHEMA_VERSION:
             raise CtxError("SCHEMA_VIOLATION", "schema_version")

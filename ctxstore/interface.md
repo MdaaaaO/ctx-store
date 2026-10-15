@@ -119,9 +119,10 @@ Every store has settings, whatever the backend:
 | `schema_version` | The version of the store's layout and schemas |
 | `generated` | Glob patterns over doc keys (`INDEX.md`): docs another tool writes. Not validated, not writable (`GENERATED`) |
 | `ignore` | Glob patterns: not docs. Every verb answers `NO_SUCH_DOC` for them |
-| `resolve` | `key_regex`, `fields`, `section` (`ctx help resolve`) |
+| `resolve` | `key_regex` (a string that compiles as a regular expression), `fields` (a list of strings), `section` (a string); any other shape is `SCHEMA_VIOLATION` (`ctx help resolve`) |
 | `maintain` | `size_guard`, `keep_log`, `archive`, `session_days`, `session_archive`, `catalog`, `git_debounce` (`ctx help maintain`) |
 | `mcp` | `actors`: a regular expression; an MCP write may name an actor it matches in full (`ctx mcp`), none when it is absent |
+| any other key | The consumer's own: kept in the marker as written, never read by a verb, never an error. A key above with the wrong shape is `SCHEMA_VIOLATION` |
 
 Every write leaves one audit row: `seq` (the store's write counter) `ts`
 `actor` `verb` `doc` `before` `after` (sha256 of the doc, `null` for none).
@@ -156,7 +157,7 @@ reads work, writes fail with `STORE_NOT_NAMED`.
 
 | Path | Holds |
 |---|---|
-| `ctx-store.json` | `schema_version`, and optionally `generated` and `ignore`: lists of glob patterns over doc paths. A generated doc is not validated and not writable (`GENERATED`); an ignored one is not a doc: every verb answers `NO_SUCH_DOC` for it. `resolve`: `key_regex`, `fields`, `section` (see `ctx help resolve`). `mcp`: `actors`, a regular expression; an MCP write may name an actor it matches in full (`ctx mcp`), none when it is absent |
+| `ctx-store.json` | `schema_version`, and optionally `generated` and `ignore`: lists of glob patterns over doc paths. A generated doc is not validated and not writable (`GENERATED`); an ignored one is not a doc: every verb answers `NO_SUCH_DOC` for it. `resolve`: `key_regex`, `fields`, `section` (see `ctx help resolve`); a `key_regex` that does not compile, a `section` that is not a string or `fields` that is not a list of strings is `SCHEMA_VIOLATION ctx-store.json resolve`. `mcp`: `actors`, a regular expression; an MCP write may name an actor it matches in full (`ctx mcp`), none when it is absent |
 | `**/*.md` | The docs. A doc's key is its path without `.md` (`reference/lock-modes`) |
 | `.ctx/types/<type>.json` | One schema per doc type |
 | `.ctx/templates/<type>.md` | The scaffold of a new doc of the type; `{{TITLE}}` `{{TYPE}}` `{{DATE}}` `{{KEY}}` `{{SLUG}}` are filled in |
@@ -597,7 +598,8 @@ store named is `STORE_NOT_NAMED`.
 
 - `--settings`: a JSON object of `generated`, `ignore`, `resolve`, `maintain`
   and `mcp` (`ctx help stores`), and `schema_version` if given the current
-  one, 1. It becomes `ctx-store.json`. Without it a new store gets
+  one, 1. Any other top-level key is the consumer's own and is written as
+  given. It becomes `ctx-store.json`. Without it a new store gets
   `{"schema_version": 1}` and an existing one keeps its marker.
 - `--types`: a folder of `<type>.json` schemas, copied to `.ctx/types/`.
 - `--templates`: a folder of `<type>.md` scaffolds, copied to `.ctx/templates/`.
@@ -606,7 +608,9 @@ A type name is lower-case letters, digits, `.`, `_` and `-`, the first a
 letter or digit; anything else in the folder is `USAGE <file>`. Every input
 is checked, as a store checks its marker and schemas when it opens, before
 anything is written: one that is not valid is `SCHEMA_VIOLATION <file>` (a
-settings key the store does not know: `SCHEMA_VIOLATION <key>`).
+known settings key of the wrong shape: `SCHEMA_VIOLATION <file>`, and
+`SCHEMA_VIOLATION <file> resolve` for a bad `resolve`; a key the store does not
+know is kept, never an error).
 
 A store file that holds the same content already is left alone (the marker:
 the same settings, however laid out), so a second run writes nothing. One

@@ -166,6 +166,13 @@ reads work, writes fail with `STORE_NOT_NAMED`.
 
 Directories whose name starts with a dot hold no docs.
 
+A key is a path below the store root. A key may also be the path the caller
+sees: absolute, or relative to the working directory. That reading applies when
+the key is absolute, when the store-relative one leaves the store, and when
+only the working-directory one names a doc that exists; the store-relative one
+wins otherwise. Every result and audit row carries the store-relative key. A
+path outside the store is `PATH_ESCAPE`.
+
 Files can change without ctx. `validate --changed` finds that
 (`UNAUDITED_WRITE`); `--adopt` records it.
 

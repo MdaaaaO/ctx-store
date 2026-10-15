@@ -156,6 +156,24 @@ class Log(StoreCase):
         data = json.loads(out)
         self.assertEqual((code, data["verb"], data["data"]["line"]), (0, "log", "- 2026-02-01 — x"))
 
+    def test_leading_date_is_kept(self):
+        before = self.text(EPIC)
+        code, out, _ = self.run_ctx("log", EPIC, "2026-10-03 — shipped.", "--json")
+        self.assertEqual((code, json.loads(out)["data"]["line"]), (0, "- 2026-10-03 — shipped."))
+        self.assertEqual(self.text(EPIC), before + "- 2026-10-03 — shipped.\n")
+
+    def test_date_elsewhere_in_the_text_is_prefixed(self):
+        for text in ("see 2026-10-03", "2026-10-03 shipped", "2026-10-03 - shipped", "2026-10-03 — "):
+            with self.subTest(text=text):
+                code, out, _ = self.run_ctx("log", EPIC, text, "--json")
+                self.assertEqual((code, json.loads(out)["data"]["line"]), (0, f"- 2026-01-08 — {text}"))
+
+    def test_date_flag_with_a_dated_text(self):
+        before = self.text(EPIC)
+        self.fails(self.run_ctx("log", EPIC, "2026-10-03 — x", "--date", "2026-02-01"), 1,
+                   "USAGE --date: bad command line")
+        self.assertEqual(self.text(EPIC), before)
+
     def test_section_in_the_middle(self):
         self.put("reference/notes", "---\ntitle: N\ntype: reference\n---\n\n## Log\n- 2026-01-01 — a\n\n\n## After\nkept\n")
         self.assertEqual(self.run_ctx("log", "reference/notes", "--section", "Log", "b")[0], 0)
@@ -239,6 +257,17 @@ class Log(StoreCase):
         self.put("epics/empty", self.text(EPIC).split("## Session log")[0] + "## Session log\n<!-- none yet -->\n")
         self.assertEqual(self.run_ctx("log", "epics/empty", "first")[0], 0)
         self.assertTrue(self.text("epics/empty").endswith("## Session log\n<!-- none yet -->\n- 2026-01-08 — first\n"))
+
+    def test_newest_first_dated_text(self):
+        schema = os.path.join(self.store, ".ctx", "types", "epic.json")
+        with open(schema) as handle:
+            rules = json.load(handle)
+        rules["log"]["order"] = "newest-first"
+        with open(schema, "w") as handle:
+            json.dump(rules, handle)
+        self.assertEqual(self.run_ctx("log", EPIC, "2026-10-03 — dated")[0], 0)
+        self.assertIn("## Session log\n- 2026-10-03 — dated\n", self.text(EPIC))
+        self.assertNotIn("2026-10-03 — 2026-10-03", self.text(EPIC))
 
     def test_ledger(self):
         self.assertEqual(self.run_ctx("log", "ledger", "| 2026-01-08 | appended |")[0], 0)

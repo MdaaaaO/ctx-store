@@ -69,6 +69,28 @@ def _same(before, data):
         return False
 
 
+def _version(data):
+    """The `version` of a type schema's bytes: absent is 0; None when the bytes
+    are not JSON or the version is not an integer."""
+    try:
+        schema = json.loads(data)
+    except ValueError:
+        return None
+    version = schema.get("version", 0) if isinstance(schema, dict) else None
+    return version if type(version) is int else None
+
+
+def _older(name, before, data):
+    """(installed, offered) when --upgrade would move a type schema back to a
+    lower version, else None."""
+    if not name.startswith(".ctx/types/"):
+        return None
+    installed, offered = _version(before), _version(data)
+    if installed is not None and offered is not None and installed > offered:
+        return installed, offered
+    return None
+
+
 def _put(root, name, data):
     if fs.write_atomic(os.path.join(root, *name.split("/")), data) != data:
         raise CtxError("STORE_READONLY", name)
@@ -125,15 +147,18 @@ def init(config, params):
     # --upgrade replaces a file only while it holds what init last wrote there:
     # one edited since is kept. A file that already matches, with no init row
     # yet (a store made by hand), gets one as the baseline for the next upgrade.
+    # A type schema at a lower version than the installed one is never written.
     upgrade = params.get("upgrade")
     last = _last_init(root, config) if upgrade else {}
-    plan, unchanged, kept, baseline = [], [], [], []
+    plan, unchanged, kept, downgraded, baseline = [], [], [], {}, []
     for name, data in files:
         before = fs.read_file(os.path.join(root, *name.split("/")))
         if before == data or (name == fs.MARKER and before is not None and _same(before, data)):
             unchanged.append(name)
             if upgrade and name not in last:
                 baseline.append((name, before))
+        elif before is not None and upgrade and (older := _older(name, before, data)):
+            downgraded[name] = older
         elif before is not None and upgrade and last.get(name) != digest(before):
             kept.append(name)
         elif before is not None and not (params.get("replace") or upgrade):
@@ -159,10 +184,14 @@ def init(config, params):
     written = [name for name, _, _ in plan]
     lines = [f"ok: store {root}, {len(written)} written, {len(unchanged)} unchanged"]
     if upgrade:
-        lines[0] += f", {len(kept)} kept"
-    lines += [f"{'written' if name in written else 'kept' if name in kept else 'unchanged'}: {name}"
-              for name, _ in files]
+        lines[0] += f", {len(kept) + len(downgraded)} kept"
+    for name, _ in files:
+        if name in downgraded:
+            lines.append("kept: {} (version {} installed, {} offered)".format(name, *downgraded[name]))
+        else:
+            lines.append(f"{'written' if name in written else 'kept' if name in kept else 'unchanged'}: {name}")
     data = {"store": root, "unchanged": unchanged, "written": written}
     if upgrade:
         data["kept"] = kept
+        data["downgraded"] = list(downgraded)
     return data, "\n".join(lines)

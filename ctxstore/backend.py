@@ -107,7 +107,9 @@ class Backend:
 
 
 def check_settings(data, where):
-    """Settings as the core uses them, from what a backend has stored."""
+    """Settings as the core uses them, from what a backend has stored. A
+    top-level key the core does not know is the consumer's own: no verb reads
+    it and it is not an error."""
     if not isinstance(data, dict):
         raise CtxError("SCHEMA_VIOLATION", where)
     version = data.get("schema_version")
@@ -123,6 +125,16 @@ def check_settings(data, where):
         settings[key] = data.get(key, {})
         if not isinstance(settings[key], dict):
             raise CtxError("SCHEMA_VIOLATION", where)
+    shape = settings["resolve"]
+    if (not isinstance(shape.get("key_regex", ""), str)
+            or not isinstance(shape.get("section", ""), str)
+            or not isinstance(shape.get("fields", []), list)
+            or not all(isinstance(v, str) for v in shape.get("fields", []))):
+        raise CtxError("SCHEMA_VIOLATION", f"{where} resolve")
+    try:
+        re.compile(shape.get("key_regex", ""))
+    except re.error:
+        raise CtxError("SCHEMA_VIOLATION", f"{where} resolve") from None
     actors = settings["mcp"].get("actors")
     if actors is not None:
         try:

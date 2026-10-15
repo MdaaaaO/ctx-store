@@ -146,9 +146,15 @@ class Init(unittest.TestCase):
 
     def test_bad_settings_create_nothing(self):
         settings = os.path.join(self.work.name, "settings.json")
-        cases = (('{"schema_version": 1, "colour": true}', "colour"), ('{"schema_version": 2}', "schema_version"),
+        cases = (('{"schema_version": 2}', "schema_version"),
                  ('{"ignore": "README.md"}', settings), ("[]", settings), ("{", settings),
-                 ('{"schema_version": 1, "mcp": {"actors": "("}}', settings))
+                 ('{"schema_version": 1, "mcp": {"actors": "("}}', settings),
+                 ('{"schema_version": 1, "resolve": []}', settings),
+                 ('{"schema_version": 1, "resolve": {"key_regex": "("}}', f"{settings} resolve"),
+                 ('{"schema_version": 1, "resolve": {"key_regex": 7}}', f"{settings} resolve"),
+                 ('{"schema_version": 1, "resolve": {"fields": "epic"}}', f"{settings} resolve"),
+                 ('{"schema_version": 1, "resolve": {"fields": ["epic", 3]}}', f"{settings} resolve"),
+                 ('{"schema_version": 1, "resolve": {"section": ["Tracker"]}}', f"{settings} resolve"))
         for text, detail in cases:
             self.write(settings, text)
             code, out, err = self.run_ctx("init", "--settings", settings, "--types", self.types)
@@ -175,6 +181,37 @@ class Init(unittest.TestCase):
         self.assertIn("written: ctx-store.json\n", out)
         self.assertEqual(json.loads(self.read("ctx-store.json")),
                          {"schema_version": 1, "mcp": {"actors": "^[a-z]+$"}})
+
+    def test_a_key_of_the_consumers_own_is_kept(self):
+        """#87: a top-level key the store does not know is written as given,
+        survives a later `--upgrade` untouched, and a change to it counts as a changed marker."""
+        settings = os.path.join(self.work.name, "settings.json")
+        own = {"schema_version": 1, "consumer": {"seed": ["a", {"b": None}], "n": 2}, "flag": True,
+               "resolve": {"key_regex": "EX-[0-9]+", "fields": ["key"]}}
+        self.write(settings, json.dumps(own))
+        code, out, err = self.run_ctx("init", "--settings", settings, "--types", self.types)
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(json.loads(self.read("ctx-store.json")), own)
+        written = self.read("ctx-store.json")
+        code, out, _ = self.run_ctx("init", "--settings", settings, "--types", self.types, "--upgrade")
+        self.assertEqual(code, 0)
+        self.assertIn("unchanged: ctx-store.json\n", out)
+        self.assertEqual(self.read("ctx-store.json"), written)
+        self.assertEqual(self.run_ctx("validate")[0], 0)
+        own["flag"] = False
+        self.write(settings, json.dumps(own))
+        code, out, _ = self.run_ctx("init", "--settings", settings, "--types", self.types, "--upgrade")
+        self.assertEqual(code, 0)
+        self.assertIn("written: ctx-store.json\n", out)
+        self.assertEqual(json.loads(self.read("ctx-store.json")), own)
+
+    def test_a_bad_resolve_in_a_store_is_a_schema_violation(self):
+        self.init()
+        for resolve in ({"key_regex": "("}, {"key_regex": ["x"]}, {"fields": "epic"}, {"fields": [1]}, {"section": 5}):
+            self.write(os.path.join(self.store, "ctx-store.json"), json.dumps({"schema_version": 1, "resolve": resolve}))
+            for args in (("validate",), ("get", "epics/sample")):
+                code, out, err = self.run_ctx(*args)
+                self.assertEqual((code, err), (3, "SCHEMA_VIOLATION ctx-store.json resolve: schema violation\n"), (resolve, args))
 
     def test_bad_schema_writes_nothing(self):
         self.write(os.path.join(self.types, "zeta.json"), '{"sections": "Goal"}')

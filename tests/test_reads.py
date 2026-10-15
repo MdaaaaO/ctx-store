@@ -300,6 +300,14 @@ class Resolve(StoreCase):
                    "AMBIGUOUS_SELECTOR EX-1 (sessions/alpha-rollout, sessions/twin): selector matches more than one target")
         self.fails(self.run_ctx("resolve"), 1, "USAGE key: bad command line")
 
+    def test_fields_name_the_docs_fields(self):
+        """#87: a `resolve` with `fields: ["key"]` still resolves."""
+        with open(os.path.join(self.store, "ctx-store.json"), "w") as handle:
+            json.dump({"schema_version": 1, "colour": "red", "resolve": {"key_regex": "EX-[0-9]+", "fields": ["key"]}}, handle)
+        self.put("reference/by-key", "---\ntitle: By key\ntype: reference\nkey: EX-7\n---\n")
+        self.assertEqual(self.run_ctx("resolve", "EX-7", "--json")[0], 0)
+        self.fails(self.run_ctx("resolve", "EX-8"), 2, "NO_SUCH_DOC EX-8: no such doc")
+
     def test_key_shape_is_the_stores(self):
         with open(os.path.join(self.store, "ctx-store.json"), "w") as handle:
             handle.write('{"schema_version": 1}')

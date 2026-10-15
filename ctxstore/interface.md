@@ -331,7 +331,9 @@ Exit codes as for `log`; 3 `DOC_EXISTS`.
 ctx log <doc> <text> [--section <heading>] [--date <YYYY-MM-DD>] [--from <file>]
 
 Add one entry to a doc's log, under the store lock. The entry is
-`- <date> — <text>`. It goes after the section's last line, so a log reads
+`- <date> — <text>`. A text that already starts with `<YYYY-MM-DD> — ` keeps
+that date and gets no second one; `--date` with such a text is `USAGE --date`.
+It goes after the section's last line, so a log reads
 oldest first, unless the doc's type says `"order": "newest-first"`: then it
 goes before the first entry. The section is `--section`, else the
 `log.section` of the doc's type.

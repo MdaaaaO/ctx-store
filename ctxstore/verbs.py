@@ -6,6 +6,9 @@ from . import clock, frontmatter, links, search, sections
 from .contract import CtxError, Findings
 from .store import DATE, TIMESTAMP, digest
 
+# A log text that already starts with the entry's own date: `2026-10-03 — text`.
+DATED_TEXT = re.compile(r"^\d{4}-\d{2}-\d{2} — \S")
+
 SIZE_GUARD = 30000
 BUDGET = 4096
 FULL = 8192
@@ -94,7 +97,12 @@ def log(store, params):
         name = params["section"] if "section" in params else schema.get("section")
         if not name:
             raise CtxError("USAGE", "--section")
-        line = f"- {date} — {text}"
+        if DATED_TEXT.match(text):
+            if "date" in params:
+                raise CtxError("USAGE", "--date")
+            line = f"- {text}"
+        else:
+            line = f"- {date} — {text}"
         newest = schema.get("order") == "newest-first"
         add = sections.prepend_line if newest else sections.append_line
 

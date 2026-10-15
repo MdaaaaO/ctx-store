@@ -165,18 +165,36 @@ def types(root):
     return found
 
 
-def doc_path(root, key):
-    """(absolute path, key) of a doc; the path is canonical and inside the store."""
-    if not key or "\0" in key or os.path.isabs(key):
-        raise CtxError("PATH_ESCAPE", key)
-    relative = key if key.endswith(".md") else key + ".md"
-    path = os.path.realpath(os.path.join(root, relative))
+def _inside(root, path):
+    """The path's store-relative form when its real path is a doc's place in
+    the store (not the root, no dot-directory part), else None."""
     if os.path.commonpath([root, path]) != root or path == root:
-        raise CtxError("PATH_ESCAPE", key)
+        return None
     inside = os.path.relpath(path, root)
     if any(part.startswith(".") for part in inside.split(os.sep)):
+        return None
+    return inside
+
+
+def doc_path(root, key):
+    """(absolute path, key) of a doc; the path is canonical and inside the store.
+
+    A key is a path below the root. A caller may also name a doc by the path it
+    sees, absolute or relative to its working directory; that reading is taken
+    when the key is absolute, when the store-relative one leaves the store, and
+    when only the working-directory one names a doc that exists. The store-relative
+    reading wins every other time. The key returned is always the store-relative one."""
+    if not key or "\0" in key:
         raise CtxError("PATH_ESCAPE", key)
-    return path, inside[:-3].replace(os.sep, "/")
+    relative = key if key.endswith(".md") else key + ".md"
+    below = None if os.path.isabs(key) else _inside(root, os.path.realpath(os.path.join(root, relative)))
+    seen = _inside(root, os.path.realpath(relative))
+    if below is None or (seen is not None and not os.path.isfile(os.path.join(root, below))
+                         and os.path.isfile(os.path.join(root, seen))):
+        below = seen
+    if below is None:
+        raise CtxError("PATH_ESCAPE", key)
+    return os.path.join(root, below), below[:-3].replace(os.sep, "/")
 
 
 def list_docs(root):

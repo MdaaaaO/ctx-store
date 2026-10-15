@@ -636,11 +636,20 @@ content and has no `init` row yet, as in a store made by hand, gets one
 (`before` = `after`), the baseline for the next upgrade. `--upgrade` with
 `--replace` is `USAGE`.
 
+With `--upgrade` a type schema is never moved back: one whose `version` (absent
+is 0) is below the installed file's is not written, whatever its digest, and is
+reported `kept: .ctx/types/<type>.json (version 3 installed, 2 offered)`, under
+`downgraded` in `--json` and not under `kept`; the summary's `N kept` counts
+both. An installed file that is not valid JSON, or whose `version` is not an
+integer, is judged by the rules above only: init never writes such a file (it
+is `SCHEMA_VIOLATION`), so it is a hand edit and the digest rule keeps it.
+`--replace` overwrites a newer version, as it does any file.
+
 A new store's marker is written first, then the rest under the store lock.
 One audit row per file written, verb `init`, `doc` the store file;
 `validate --changed` passes over them. The result names each file `written`,
 `unchanged` or `kept`; `--json` gives `store`, `written`, `unchanged`, and
-`kept` with `--upgrade`. Not offered over MCP.
+`kept` and `downgraded` with `--upgrade`. Not offered over MCP.
 
 Exit 0; 1 `USAGE`; 3 `SCHEMA_VIOLATION`; 4 `LOCK_TIMEOUT`; 5
 `STORE_READONLY` (a directory it cannot write), `STORE_NOT_NAMED`.

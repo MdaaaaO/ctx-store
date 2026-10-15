@@ -141,6 +141,69 @@ class Init(unittest.TestCase):
         self.write(os.path.join(self.types, "epic.json"), '{"sections": ["Goal"]}\n')
         self.assertIn("written: .ctx/types/epic.json\n", self.init("--upgrade")[1])
 
+    def schema(self, version, *sections):
+        """A type schema text at `version` (0: none), with these sections."""
+        body = {"sections": list(sections) or ["Goal"]}
+        if version:
+            body.update(version=version, migrations=[{"to": number} for number in range(1, version + 1)])
+        return json.dumps(body) + "\n"
+
+    def offer(self, version, *sections):
+        self.write(os.path.join(self.types, "epic.json"), self.schema(version, *sections))
+
+    def test_upgrade_never_installs_an_older_type_schema(self):
+        """#88: a lower `version` offered over a newer installed one is not written,
+        even where the installed file is what init last wrote, and adds no audit row."""
+        self.offer(3)
+        self.init()
+        installed, rows = self.read(".ctx/types/epic.json"), len(self.audit())
+        self.offer(2, "Goal", "More")
+        code, out, _ = self.init("--upgrade")
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith(f"ok: store {self.store}, 0 written, 5 unchanged, 1 kept\n"), out)
+        self.assertIn("kept: .ctx/types/epic.json (version 3 installed, 2 offered)\n", out)
+        self.assertEqual(self.read(".ctx/types/epic.json"), installed)
+        self.assertEqual(len(self.audit()), rows)
+        data = json.loads(self.init("--upgrade", "--json")[1])["data"]
+        self.assertEqual((data["written"], data["kept"], data["downgraded"]), ([], [], [".ctx/types/epic.json"]))
+        self.assertEqual(self.read(".ctx/types/epic.json"), installed)
+        # an absent version is 0
+        self.offer(0, "Goal", "More")
+        self.assertIn("kept: .ctx/types/epic.json (version 3 installed, 0 offered)\n", self.init("--upgrade")[1])
+        self.assertEqual(self.read(".ctx/types/epic.json"), installed)
+
+    def test_upgrade_with_the_same_version_follows_the_digest_rule(self):
+        self.offer(2)
+        self.init()
+        self.offer(2, "Goal", "More")
+        out = self.init("--upgrade")[1]  # still as init left it: written
+        self.assertIn("written: .ctx/types/epic.json\n", out)
+        self.assertEqual(json.loads(self.init("--upgrade", "--json")[1])["data"]["downgraded"], [])
+        self.write(os.path.join(self.store, ".ctx", "types", "epic.json"), self.schema(2, "Mine"))
+        self.offer(2, "Goal", "Other")
+        out = self.init("--upgrade")[1]  # edited since: kept, and not as a downgrade
+        self.assertIn("kept: .ctx/types/epic.json\n", out)
+        self.assertEqual(self.read(".ctx/types/epic.json"), self.schema(2, "Mine").encode())
+
+    def test_upgrade_judges_an_installed_file_that_is_not_json_by_the_digest_rule(self):
+        self.init()
+        self.write(os.path.join(self.store, ".ctx", "types", "epic.json"), "{")
+        self.offer(1)
+        out = self.init("--upgrade")[1]
+        self.assertIn("kept: .ctx/types/epic.json\n", out)
+        self.assertNotIn("installed", out)
+
+    def test_replace_overwrites_a_newer_installed_version(self):
+        self.offer(3)
+        self.init()
+        self.offer(2)
+        code, out, _ = self.init("--replace")
+        self.assertEqual(code, 0)
+        self.assertIn("written: .ctx/types/epic.json\n", out)
+        self.assertEqual(self.read(".ctx/types/epic.json"), self.schema(2).encode())
+        self.offer(1)  # without either flag a differing file stays SCHEMA_VIOLATION
+        self.assertEqual(self.init()[0], 3)
+
     def test_upgrade_and_replace_are_one_or_the_other(self):
         self.assertEqual(self.init("--upgrade", "--replace")[:3:2], (1, "USAGE --upgrade: bad command line\n"))
 

@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file. Generated b
 [conventional-release](https://github.com/MdaaaaO/conventional-release) from
 [Conventional Commits](https://www.conventionalcommits.org).
 
+## 0.8.0 (2026-10-15)
+
+
+### Features
+
+* **core:** settings keep consumer keys and validate resolve (#87) ([#90](https://github.com/MdaaaaO/ctx-store/issues/90)) ([8fec7d3](https://github.com/MdaaaaO/ctx-store/commit/8fec7d3c020b703718a7f12eb2ee604abb6cd497))
+
+
+### Bug Fixes
+
+* **core:** log keeps a leading date instead of doubling it (#89) ([#92](https://github.com/MdaaaaO/ctx-store/issues/92)) ([f84a98c](https://github.com/MdaaaaO/ctx-store/commit/f84a98cb07f184985b0e082a3c8d949e0ac00a4f))
+* **core:** a doc path inside the store is not PATH_ESCAPE (#86) ([#91](https://github.com/MdaaaaO/ctx-store/issues/91)) ([3a06e58](https://github.com/MdaaaaO/ctx-store/commit/3a06e58d1ce7e17b8bd0ec0570bbf20d0bdb6cfe))
+* **core:** init --upgrade never installs an older type schema (#88) ([#93](https://github.com/MdaaaaO/ctx-store/issues/93)) ([ea3e591](https://github.com/MdaaaaO/ctx-store/commit/ea3e5917f56ee17b76bc1a9b972dc9bbb9301fd1))
+
+
+### CI
+
+* **release:** publish releases to PyPI via trusted publishing (#80) ([#81](https://github.com/MdaaaaO/ctx-store/issues/81)) ([dbafd49](https://github.com/MdaaaaO/ctx-store/commit/dbafd49fa661239e0d9493ffe37fbf2db5e17bbe))
+
 ## 0.7.0 (2026-10-02)
 
 

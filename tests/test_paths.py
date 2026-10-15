@@ -71,6 +71,16 @@ class DocPaths(StoreCase):
         self.assertEqual(self.doc_of(result), f"{self.name}/x")
         self.assertIn("# Nested", json.loads(result[1])["data"]["text"])
 
+    def test_new_doc_is_never_redirected(self):
+        # Neither reading names a file yet: a new doc goes where the store-relative key says,
+        # from the parent directory and from a folder inside the store alike.
+        self.assertEqual(self.doc_of(self.run_in(self.parent, "new", "reference", "reference/fresh")), "reference/fresh")
+        self.assertTrue(os.path.isfile(os.path.join(self.store, "reference", "fresh.md")))
+        folder = os.path.join(self.store, "epics")
+        self.assertEqual(self.doc_of(self.run_in(folder, "new", "reference", "reference/inside")), "reference/inside")
+        self.assertTrue(os.path.isfile(os.path.join(self.store, "reference", "inside.md")))
+        self.assertFalse(os.path.exists(os.path.join(folder, "reference")))
+
 
 if __name__ == "__main__":
     unittest.main()

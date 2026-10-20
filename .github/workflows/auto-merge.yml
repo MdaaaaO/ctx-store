@@ -147,7 +147,9 @@ jobs:
           done
           [ "${mergeable% *}" = true ] || skip "PR #$pr is not mergeable ($mergeable)"
 
-          echo "auto-merge: PR #$pr — checks green, ${unreviewed:+$unreviewed PR (no review by design)}${unreviewed:-$REVIEWER approved this head}, no open threads, mergeable"
+          verdict="$REVIEWER approved this head"
+          [ -z "$unreviewed" ] || verdict="$unreviewed PR (no review by design)"
+          echo "auto-merge: PR #$pr — checks green, $verdict, no open threads, mergeable"
           out pr "$pr"
           out go true
 
@@ -161,9 +163,16 @@ jobs:
           # REST, not `gh pr merge`: the fine-grained PAT is refused on the GraphQL `repository.pullRequest`
           # query gh runs first. `sha` is the head the gates checked — GitHub
           # answers 409 if it moved. Subject/body come from the repo's squash settings (PR title / PR body).
-          if out=$(gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f merge_method=squash -f sha="$SHA" 2>&1); then
-            echo "auto-merge: merged PR #$PR at $SHA"
-          else
-            echo "::warning title=auto-merge not merged::PR #$PR at $SHA — $(printf '%s' "$out" | tail -1)"
-            exit 1
-          fi
+          # Two PRs merged in the same minute (dependabot opens them together): the second gets 405 "Base
+          # branch was modified" while GitHub recomputes it against the new main — wait and try again.
+          for attempt in 1 2 3 4 5; do
+            if out=$(gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f merge_method=squash -f sha="$SHA" 2>&1); then
+              echo "auto-merge: merged PR #$PR at $SHA"
+              exit 0
+            fi
+            grep -q "Base branch was modified" <<< "$out" || break
+            echo "auto-merge: main moved under PR #$PR (attempt $attempt) — retrying"
+            sleep $((attempt * 15))
+          done
+          echo "::warning title=auto-merge not merged::PR #$PR at $SHA — $(printf '%s' "$out" | tail -1)"
+          exit 1

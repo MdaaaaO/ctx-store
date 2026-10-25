@@ -148,7 +148,7 @@ jobs:
             || { rm -f .review/RULES.md; echo "::warning title=claude-review rules::docs/REVIEW.md is not on the base branch — the reviewer uses the checkout's copy"; }
 
       - if: steps.token.outputs.enabled == 'true'
-        uses: anthropics/claude-code-action@374f254f5efaf968abfe15d399fd90972e8138b9 # v1
+        uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           use_sticky_comment: true
@@ -274,7 +274,7 @@ jobs:
           fetch-depth: 0
 
       - if: steps.token.outputs.enabled == 'true'
-        uses: anthropics/claude-code-action@374f254f5efaf968abfe15d399fd90972e8138b9 # v1
+        uses: anthropics/claude-code-action@ae68417a745a5df4b2124873632bd73a2255e6f6 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # No prompt → tag mode: answers the @claude comment in context. "@claude review" is a
